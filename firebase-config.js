@@ -22,7 +22,8 @@ const db = getFirestore(app);
 // Configure Google provider
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
-  prompt: 'select_account'
+  prompt: 'select_account',
+  redirect_uri: window.location.origin // Adicione esta linha
 });
 
 export { db, auth, provider };
