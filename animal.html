@@ -234,7 +234,9 @@
       return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
     }
 
-    // Inicialização
+// Inicialização
+setupAuth();
+    
     document.addEventListener('DOMContentLoaded', () => {
       setupAuth();
       animalId = getAnimalId();
