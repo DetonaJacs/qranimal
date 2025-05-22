@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Verifica se é um email autorizado
       if (user.email === 'jacson311@gmail.com') {
-        window.location.href = 'gerar-qrcode.html';
+        window.location.href = 'gerar-qr.html';
       } else {
         await auth.signOut();
         errorElement.textContent = 'Apenas o administrador pode acessar este sistema.';
