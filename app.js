@@ -1,6 +1,6 @@
 import { db, auth, provider } from './firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-import { signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
 // Elementos do DOM
 const loadingElement = document.getElementById('loading');
@@ -20,28 +20,27 @@ let currentUser = null;
 let animalId = null;
 let animalData = null;
 
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
+// Inicialização modificada
+document.addEventListener('DOMContentLoaded', async () => {
   checkAnimalId();
-  setupAuth();
+  await setupAuth();
+  
+  // Verificar se estamos retornando de um redirecionamento de login
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      // Usuário acabou de fazer login via redirecionamento
+      currentUser = result.user;
+      updateUI();
+      loadAnimalData();
+    }
+  } catch (error) {
+    showMessage(`Erro no login: ${error.message}`, true);
+  }
 });
 
-// Verificar ID do animal na URL
-function checkAnimalId() {
-  const params = new URLSearchParams(window.location.search);
-  animalId = params.get("id");
-  
-  if (!animalId || !/^[a-zA-Z0-9_-]{8,32}$/.test(animalId)) {
-    showMessage("ID do animal inválido ou não especificado.", true);
-    hideLoading();
-    return;
-  }
-  
-  loadAnimalData();
-}
-
-// Configurar autenticação
-function setupAuth() {
+// Configurar autenticação modificada
+async function setupAuth() {
   onAuthStateChanged(auth, (user) => {
     currentUser = user;
     updateUI();
@@ -53,10 +52,18 @@ function setupAuth() {
       loadAnimalData();
     } else {
       userInfoElement.style.display = 'none';
-      // Se não está logado e não há dados, mostra o login
       if (!animalData) {
         loginContainer.style.display = 'block';
       }
+    }
+  });
+
+  googleLoginBtn.addEventListener('click', async () => {
+    try {
+      // Substituído signInWithPopup por signInWithRedirect
+      await signInWithRedirect(auth, provider);
+    } catch (error) {
+      showMessage(`Erro no login: ${error.message}`, true);
     }
   });
 
