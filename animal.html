@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta http-equiv="Content-Security-Policy" 
     content="default-src 'self';
-             script-src 'self' https://www.gstatic.com 'unsafe-inline';
+             script-src 'self' https://www.gstatic.com;
              style-src 'self' 'unsafe-inline';
              img-src 'self' https://www.google.com https://*.googleapis.com;
              connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com;
@@ -13,19 +13,20 @@
              frame-src 'self' https://www.google.com;">
   <title>QR Animal</title>
   <style>
-    /* Todos os estilos movidos para aqui */
     body {
       font-family: Arial, sans-serif;
       max-width: 800px;
       margin: 0 auto;
       padding: 20px;
     }
-    #login-container, #form-container, #dados-animal, #auth-message {
-      display: none;
+    #login-container, #form-container, #dados-animal, #auth-message, #loading {
       margin: 20px 0;
       padding: 20px;
       border: 1px solid #ddd;
       border-radius: 8px;
+    }
+    #login-container, #form-container, #dados-animal, #auth-message {
+      display: none;
     }
     .google-btn {
       background-color: #4285F4;
@@ -49,9 +50,34 @@
       margin: 8px 0;
       box-sizing: border-box;
     }
+    #user-info {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    #user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    #logout-btn {
+      background-color: #d32f2f;
+      margin-left: auto;
+    }
   </style>
 </head>
 <body>
+  <div id="loading">
+    <h2>Carregando informações do animal...</h2>
+  </div>
+
+  <div id="user-info" style="display:none;">
+    <img id="user-avatar" src="" alt="Foto do usuário">
+    <span id="user-email"></span>
+    <button id="logout-btn" class="google-btn">Sair</button>
+  </div>
+
   <h1>Cadastro do Animal</h1>
   
   <div id="login-container">
@@ -86,9 +112,202 @@
     <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
     <p><strong>Raça:</strong> <span id="vRaca"></span></p>
     <p><strong>Observações:</strong> <span id="vObs"></span></p>
+    <button id="editar-btn" class="google-btn" style="background-color: #FFA000;">Editar Dados</button>
   </div>
 
-  <!-- Scripts externos -->
-  <script src="auth.js" type="module"></script>
+  <script type="module">
+    import { db, auth, provider } from './firebase-config.js';
+    import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import { signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+
+    // Elementos do DOM
+    const loadingElement = document.getElementById('loading');
+    const userInfoElement = document.getElementById('user-info');
+    const loginContainer = document.getElementById('login-container');
+    const authMessage = document.getElementById('auth-message');
+    const formContainer = document.getElementById('form-container');
+    const dataContainer = document.getElementById('dados-animal');
+    const googleLoginBtn = document.getElementById('googleLogin');
+    const logoutBtn = document.getElementById('logout-btn');
+    const editBtn = document.getElementById('editar-btn');
+    const userAvatar = document.getElementById('user-avatar');
+    const userEmail = document.getElementById('user-email');
+
+    // Variáveis de estado
+    let currentUser = null;
+    let animalId = null;
+    let animalData = null;
+
+    // Inicialização
+    document.addEventListener('DOMContentLoaded', () => {
+      checkAnimalId();
+      setupAuth();
+    });
+
+    // Verificar ID do animal na URL
+    function checkAnimalId() {
+      const params = new URLSearchParams(window.location.search);
+      animalId = params.get("id");
+      
+      if (!animalId || !/^[a-zA-Z0-9_-]{8,32}$/.test(animalId)) {
+        showMessage("ID do animal inválido ou não especificado.", true);
+        hideLoading();
+        return;
+      }
+      
+      loadAnimalData();
+    }
+
+    // Configurar autenticação
+    function setupAuth() {
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        updateUI();
+        
+        if (user) {
+          userInfoElement.style.display = 'flex';
+          userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
+          userEmail.textContent = user.email;
+          loadAnimalData();
+        } else {
+          userInfoElement.style.display = 'none';
+        }
+      });
+
+      googleLoginBtn.addEventListener('click', async () => {
+        try {
+          await signInWithPopup(auth, provider);
+        } catch (error) {
+          showMessage(`Erro no login: ${error.message}`, true);
+        }
+      });
+
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await signOut(auth);
+        } catch (error) {
+          console.error('Erro ao sair:', error);
+        }
+      });
+
+      editBtn?.addEventListener('click', () => {
+        if (!animalData) return;
+        
+        showAnimalForm();
+        document.getElementById('nome').value = animalData.nome || '';
+        document.getElementById('especie').value = animalData.especie || '';
+        document.getElementById('raca').value = animalData.raca || '';
+        document.getElementById('observacoes').value = animalData.observacoes || '';
+      });
+    }
+
+    // Carregar dados do animal
+    async function loadAnimalData() {
+      try {
+        const docRef = doc(db, "animais", animalId);
+        const docSnap = await getDoc(docRef);
+
+        hideLoading();
+        
+        if (docSnap.exists()) {
+          animalData = docSnap.data();
+          showAnimalData();
+        } else if (currentUser) {
+          showAnimalForm();
+        } else {
+          showAnimalData(); // Mostra dados vazios para visitantes
+        }
+      } catch (error) {
+        hideLoading();
+        showMessage(`Erro ao carregar dados: ${error.message}`, true);
+      }
+    }
+
+    // Mostrar dados do animal
+    function showAnimalData() {
+      document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
+      document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
+      document.getElementById("vRaca").textContent = animalData?.raca || "Não informado";
+      document.getElementById("vObs").textContent = animalData?.observacoes || "Nenhuma observação";
+      
+      dataContainer.style.display = "block";
+      formContainer.style.display = "none";
+      
+      // Mostrar botão de edição apenas se estiver logado e houver dados
+      editBtn.style.display = animalData && currentUser ? "block" : "none";
+    }
+
+    // Mostrar formulário para cadastro/edição
+    function showAnimalForm() {
+      formContainer.style.display = "block";
+      dataContainer.style.display = "none";
+      
+      const form = document.getElementById("animalForm");
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById("submit-btn");
+        submitBtn.disabled = true;
+        const errorElement = document.getElementById("error-message");
+        errorElement.textContent = "";
+        
+        try {
+          const nome = sanitizeInput(document.getElementById("nome").value);
+          const especie = sanitizeInput(document.getElementById("especie").value);
+          const raca = sanitizeInput(document.getElementById("raca").value);
+          const observacoes = sanitizeInput(document.getElementById("observacoes").value);
+
+          if (!nome || !especie || !raca) {
+            throw new Error("Preencha todos os campos obrigatórios");
+          }
+
+          await setDoc(doc(db, "animais", animalId), { 
+            nome, 
+            especie, 
+            raca, 
+            observacoes,
+            updatedAt: new Date(),
+            updatedBy: currentUser.uid,
+            ...(animalData ? {} : { 
+              createdAt: new Date(),
+              createdBy: currentUser.uid 
+            })
+          });
+
+          alert("Dados salvos com sucesso!");
+          location.reload();
+        } catch (error) {
+          errorElement.textContent = error.message;
+          submitBtn.disabled = false;
+        }
+      };
+    }
+
+    // Atualizar interface
+    function updateUI() {
+      if (currentUser) {
+        loginContainer.style.display = 'none';
+      } else {
+        loginContainer.style.display = animalData ? 'none' : 'block';
+      }
+    }
+
+    // Mostrar mensagens
+    function showMessage(message, isError) {
+      authMessage.textContent = message;
+      authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
+      authMessage.style.display = 'block';
+    }
+
+    // Esconder loading
+    function hideLoading() {
+      loadingElement.style.display = 'none';
+    }
+
+    // Sanitizar inputs
+    function sanitizeInput(str) {
+      return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
+    }
+  </script>
 </body>
 </html>
