@@ -67,14 +67,15 @@ async function setupAuth() {
       updateUI();
     }
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       currentUser = user;
-      updateUI();
-      // Atualiza visibilidade do botão de edição
-      if (animalData) {
-        const canEdit = user?.uid === animalData.createdBy || user?.uid === ADMIN_UID;
-        editBtn.style.display = canEdit ? "block" : "none";
+      
+      // Recarrega os dados do animal após autenticação
+      if (user && !animalData) {
+        await loadAnimalData();
       }
+      
+      updateUI();
     });
   } catch (error) {
     console.error("Auth error:", error);
@@ -86,10 +87,16 @@ async function setupAuth() {
 function showAnimalForm() {
   if (!currentUser) {
     showMessage("Faça login para editar", true);
+    loginContainer.style.display = 'block';
     return;
   }
 
-  const canEdit = currentUser.uid === animalData?.createdBy || currentUser.uid === ADMIN_UID;
+  if (!animalData) {
+    showMessage("Dados do animal não carregados", true);
+    return;
+  }
+
+  const canEdit = currentUser.uid === animalData.createdBy || currentUser.uid === ADMIN_UID;
   if (!canEdit) {
     showMessage("Apenas o dono pode editar este animal", true);
     return;
@@ -190,6 +197,19 @@ function showMessage(message, isError = false) {
   authMessage.style.display = 'block';
   authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
 }
+
+googleLoginBtn.addEventListener('click', async () => {
+  googleLoginBtn.disabled = true;
+  googleLoginBtn.textContent = 'Entrando...';
+  
+  try {
+    await signInWithRedirect(auth, provider);
+  } catch (error) {
+    showMessage(`Erro no login: ${error.message}`, true);
+    googleLoginBtn.disabled = false;
+    googleLoginBtn.textContent = 'Entrar com Google';
+  }
+});
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
