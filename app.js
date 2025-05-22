@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/
 import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
 // Elementos do DOM
+const ADMIN_UID = "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
 const loadingElement = document.getElementById('loading');
 const userInfoElement = document.getElementById('user-info');
 const loginContainer = document.getElementById('login-container');
@@ -81,66 +82,44 @@ async function loadAnimalData() {
   }
 }
 
-// Mostra os dados do animal
-// Mostrar dados do animal (público)
+// Modifique a função showAnimalData
 function showAnimalData() {
   document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
   document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
   document.getElementById("vRaca").textContent = animalData?.raca || "Não informado";
   document.getElementById("vObs").textContent = animalData?.observacoes || "Nenhuma observação";
 
-  // Mostrar botão de edição APENAS para o criador ou admin
-  const isOwner = currentUser?.uid === animalData?.createdBy;
-  const isAdmin = currentUser?.uid === "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
+  // Verifica permissões de edição
+  const canEdit = currentUser && 
+                 (currentUser.uid === animalData?.createdBy || 
+                  currentUser.uid === ADMIN_UID);
   
-  editBtn.style.display = (isOwner || isAdmin) ? "block" : "none";
+  editBtn.style.display = canEdit ? "block" : "none";
+  dataContainer.style.display = "block";
+  formContainer.style.display = "none";
+  loginContainer.style.display = "none";
 }
 
-// Mostra o formulário para edição
+// Modifique a função showAnimalForm para verificar permissões
 function showAnimalForm() {
+  const canEdit = currentUser && 
+                 (currentUser.uid === animalData?.createdBy || 
+                  currentUser.uid === ADMIN_UID);
+  
+  if (!canEdit) {
+    showMessage("Apenas o dono ou administrador pode editar este animal", true);
+    return;
+  }
+
   formContainer.style.display = "block";
   dataContainer.style.display = "none";
   loginContainer.style.display = "none";
   
-  const form = document.getElementById("animalForm");
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    
-    const submitBtn = document.getElementById("submit-btn");
-    submitBtn.disabled = true;
-    const errorElement = document.getElementById("error-message");
-    errorElement.textContent = "";
-    
-    try {
-      const nome = sanitizeInput(document.getElementById("nome").value);
-      const especie = sanitizeInput(document.getElementById("especie").value);
-      const raca = sanitizeInput(document.getElementById("raca").value);
-      const observacoes = sanitizeInput(document.getElementById("observacoes").value);
-
-      if (!nome || !especie || !raca) {
-        throw new Error("Preencha todos os campos obrigatórios");
-      }
-
-      await setDoc(doc(db, "animais", animalId), { 
-        nome, 
-        especie, 
-        raca, 
-        observacoes,
-        updatedAt: new Date(),
-        updatedBy: currentUser.uid,
-        ...(animalData ? {} : { 
-          createdAt: new Date(),
-          createdBy: currentUser.uid 
-        })
-      });
-
-      alert("Dados salvos com sucesso!");
-      location.reload();
-    } catch (error) {
-      errorElement.textContent = error.message;
-      submitBtn.disabled = false;
-    }
-  };
+  // Preenche o formulário com os dados existentes
+  document.getElementById('nome').value = animalData?.nome || '';
+  document.getElementById('especie').value = animalData?.especie || '';
+  document.getElementById('raca').value = animalData?.raca || '';
+  document.getElementById('observacoes').value = animalData?.observacoes || '';
 }
 
 // Configura os listeners de autenticação
