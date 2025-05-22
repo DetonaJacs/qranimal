@@ -34,33 +34,43 @@ function checkAnimalId() {
   }
 }
 
-// Função principal de autenticação
 async function handleAuth() {
   try {
-    // Verifica se está retornando de um redirecionamento de login
+    // 1. Primeiro verifica o resultado do redirecionamento
     const result = await getRedirectResult(auth);
-    if (result?.user) {
+    if (result) {
       currentUser = result.user;
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
       updateUI();
       await loadAnimalData();
       return;
     }
 
-    // Monitora mudanças no estado de autenticação
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
-      updateUI();
+    // 2. Depois verifica se há usuário no localStorage
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      currentUser = JSON.parse(storedUser);
+    }
+
+    // 3. Configura o observador de estado
+    onAuthStateChanged(auth, (user) => {
       if (user) {
-        await loadAnimalData();
+        currentUser = user;
+        localStorage.setItem('currentUser', JSON.stringify(user));
+      } else {
+        currentUser = null;
+        localStorage.removeItem('currentUser');
       }
+      updateUI();
+      loadAnimalData();
     });
+
   } catch (error) {
-    console.error("Erro na autenticação:", error);
-    showMessage(`Erro no login: ${error.message}`, true);
+    console.error("Auth error:", error);
+    showMessage(`Erro na autenticação: ${error.message}`, true);
     hideLoading();
   }
 }
-
 // Carrega os dados do animal
 async function loadAnimalData() {
   try {
@@ -101,27 +111,70 @@ function showAnimalData() {
   loginContainer.style.display = "none";
 }
 
-// Modifique a função showAnimalForm para verificar permissões
 function showAnimalForm() {
-  const canEdit = currentUser && 
-                 (currentUser.uid === animalData?.createdBy || 
-                  currentUser.uid === ADMIN_UID);
-  
-  if (!canEdit) {
-    showMessage("Apenas o dono ou administrador pode editar este animal", true);
+  if (!currentUser) {
+    showMessage("Faça login para editar animais", true);
+    return;
+  }
+
+  const isOwner = currentUser.uid === animalData?.createdBy;
+  const isAdmin = currentUser.uid === ADMIN_UID;
+
+  if (!isOwner && !isAdmin) {
+    showMessage("Apenas o dono ou administrador pode editar", true);
     return;
   }
 
   formContainer.style.display = "block";
   dataContainer.style.display = "none";
-  loginContainer.style.display = "none";
   
-  // Preenche o formulário com os dados existentes
+  // Preenche o formulário
   document.getElementById('nome').value = animalData?.nome || '';
   document.getElementById('especie').value = animalData?.especie || '';
   document.getElementById('raca').value = animalData?.raca || '';
   document.getElementById('observacoes').value = animalData?.observacoes || '';
 }
+
+// Modifique a submissão do formulário:
+form.onsubmit = async (e) => {
+  e.preventDefault();
+  
+  try {
+    const nome = document.getElementById("nome").value;
+    const especie = document.getElementById("especie").value;
+    const raca = document.getElementById("raca").value;
+    const observacoes = document.getElementById("observacoes").value;
+
+    if (!nome || !especie || !raca) {
+      throw new Error("Preencha todos os campos obrigatórios");
+    }
+
+    const animalData = {
+      nome,
+      especie, 
+      raca,
+      observacoes,
+      updatedAt: new Date(),
+      updatedBy: currentUser.uid
+    };
+
+    // Mantém os dados originais se existirem
+    if (animalData.createdBy) {
+      animalData.createdBy = animalData.createdBy;
+      animalData.createdAt = animalData.createdAt;
+    } else {
+      animalData.createdBy = currentUser.uid;
+      animalData.createdAt = new Date();
+    }
+
+    await setDoc(doc(db, "animais", animalId), animalData);
+    alert("Dados salvos com sucesso!");
+    location.reload();
+    
+  } catch (error) {
+    document.getElementById("error-message").textContent = error.message;
+  }
+};
 
 // Configura os listeners de autenticação
 function setupAuthListeners() {
