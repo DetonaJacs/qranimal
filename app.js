@@ -20,81 +20,21 @@ let currentUser = null;
 let animalId = null;
 let animalData = null;
 
-// Inicialização modificada
-document.addEventListener('DOMContentLoaded', async () => {
-  checkAnimalId();
-  await setupAuth();
+// Função para verificar ID do animal na URL (agora definida antes de ser chamada)
+function checkAnimalId() {
+  const params = new URLSearchParams(window.location.search);
+  animalId = params.get("id");
   
-  // Verificar se estamos retornando de um redirecionamento de login
-  try {
-    const result = await getRedirectResult(auth);
-    if (result) {
-      // Usuário acabou de fazer login via redirecionamento
-      currentUser = result.user;
-      updateUI();
-      loadAnimalData();
-    }
-  } catch (error) {
-    showMessage(`Erro no login: ${error.message}`, true);
+  if (!animalId || !/^[a-zA-Z0-9_-]{8,32}$/.test(animalId)) {
+    showMessage("ID do animal inválido ou não especificado.", true);
+    hideLoading();
+    return;
   }
-});
-
-// Configurar autenticação modificada
-async function setupAuth() {
-  onAuthStateChanged(auth, (user) => {
-    currentUser = user;
-    updateUI();
-    
-    if (user) {
-      userInfoElement.style.display = 'flex';
-      userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
-      userEmail.textContent = user.email;
-      loadAnimalData();
-    } else {
-      userInfoElement.style.display = 'none';
-      if (!animalData) {
-        loginContainer.style.display = 'block';
-      }
-    }
-  });
-
-  googleLoginBtn.addEventListener('click', async () => {
-    try {
-      // Substituído signInWithPopup por signInWithRedirect
-      await signInWithRedirect(auth, provider);
-    } catch (error) {
-      showMessage(`Erro no login: ${error.message}`, true);
-    }
-  });
-
-  googleLoginBtn.addEventListener('click', async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      showMessage(`Erro no login: ${error.message}`, true);
-    }
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Erro ao sair:', error);
-    }
-  });
-
-  editBtn?.addEventListener('click', () => {
-    if (!animalData) return;
-    
-    showAnimalForm();
-    document.getElementById('nome').value = animalData.nome || '';
-    document.getElementById('especie').value = animalData.especie || '';
-    document.getElementById('raca').value = animalData.raca || '';
-    document.getElementById('observacoes').value = animalData.observacoes || '';
-  });
+  
+  loadAnimalData();
 }
 
-// Carregar dados do animal
+// Restante das funções (todas definidas antes de serem chamadas)
 async function loadAnimalData() {
   try {
     const docRef = doc(db, "animais", animalId);
@@ -106,10 +46,8 @@ async function loadAnimalData() {
       animalData = docSnap.data();
       showAnimalData();
     } else if (currentUser) {
-      // Se está logado e não existe cadastro, mostra formulário
       showAnimalForm();
     } else {
-      // Se não está logado e não existe cadastro, mostra mensagem
       showMessage("Animal não encontrado. Faça login para cadastrar.", false);
     }
   } catch (error) {
@@ -118,7 +56,6 @@ async function loadAnimalData() {
   }
 }
 
-// Mostrar dados do animal
 function showAnimalData() {
   document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
   document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
@@ -129,11 +66,9 @@ function showAnimalData() {
   formContainer.style.display = "none";
   loginContainer.style.display = "none";
   
-  // Mostrar botão de edição apenas se estiver logado
   editBtn.style.display = currentUser ? "block" : "none";
 }
 
-// Mostrar formulário para cadastro/edição
 function showAnimalForm() {
   formContainer.style.display = "block";
   dataContainer.style.display = "none";
@@ -180,7 +115,51 @@ function showAnimalForm() {
   };
 }
 
-// Atualizar interface
+async function setupAuth() {
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    updateUI();
+    
+    if (user) {
+      userInfoElement.style.display = 'flex';
+      userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
+      userEmail.textContent = user.email;
+      loadAnimalData();
+    } else {
+      userInfoElement.style.display = 'none';
+      if (!animalData) {
+        loginContainer.style.display = 'block';
+      }
+    }
+  });
+
+  googleLoginBtn.addEventListener('click', async () => {
+    try {
+      await signInWithRedirect(auth, provider);
+    } catch (error) {
+      showMessage(`Erro no login: ${error.message}`, true);
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    }
+  });
+
+  editBtn?.addEventListener('click', () => {
+    if (!animalData) return;
+    
+    showAnimalForm();
+    document.getElementById('nome').value = animalData.nome || '';
+    document.getElementById('especie').value = animalData.especie || '';
+    document.getElementById('raca').value = animalData.raca || '';
+    document.getElementById('observacoes').value = animalData.observacoes || '';
+  });
+}
+
 function updateUI() {
   if (currentUser) {
     loginContainer.style.display = 'none';
@@ -189,19 +168,33 @@ function updateUI() {
   }
 }
 
-// Mostrar mensagens
 function showMessage(message, isError) {
   authMessage.textContent = message;
   authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
   authMessage.style.display = 'block';
 }
 
-// Esconder loading
 function hideLoading() {
   loadingElement.style.display = 'none';
 }
 
-// Sanitizar inputs
 function sanitizeInput(str) {
   return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
 }
+
+// Inicialização (agora no final do arquivo, depois de todas as definições)
+document.addEventListener('DOMContentLoaded', async () => {
+  checkAnimalId(); // Agora a função já está definida
+  await setupAuth();
+  
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      currentUser = result.user;
+      updateUI();
+      loadAnimalData();
+    }
+  } catch (error) {
+    showMessage(`Erro no login: ${error.message}`, true);
+  }
+});
