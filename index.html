@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Animal</title>
+  <style>
+    /* Seus estilos atuais */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <h2>Carregando informações do animal...</h2>
+  </div>
+
+  <div id="user-info" class="hidden">
+    <img id="user-avatar" src="" alt="Foto do usuário">
+    <span id="user-email"></span>
+    <button id="logout-btn" class="google-btn">Sair</button>
+  </div>
+
+  <h1>Cadastro do Animal</h1>
+  
+  <div id="login-container" class="hidden">
+    <p>Você precisa fazer login para cadastrar ou editar animais.</p>
+    <button id="googleLogin" class="google-btn">
+      Entrar com Google
+    </button>
+  </div>
+
+  <div id="auth-message" class="hidden"></div>
+
+  <!-- Seus outros containers (form-container, dados-animal) -->
+  
+  <script src="app.js" type="module"></script>
+</body>
+</html>
