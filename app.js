@@ -23,7 +23,33 @@ let currentUser = null;
 let animalId = null;
 let animalData = null;
 
-// 1. Primeiro carrega o animal (sem autenticação)
+// ========== FUNÇÕES AUXILIARES ==========
+function updateUI() {
+  if (currentUser) {
+    userInfoElement.style.display = 'flex';
+    userEmail.textContent = currentUser.email;
+    userAvatar.src = currentUser.photoURL || 'https://via.placeholder.com/40';
+    loginContainer.style.display = 'none';
+    
+    const canEdit = currentUser.uid === animalData?.createdBy || currentUser.uid === ADMIN_UID;
+    editBtn.style.display = canEdit ? "block" : "none";
+  } else {
+    userInfoElement.style.display = 'none';
+    loginContainer.style.display = 'block';
+  }
+}
+
+function hideLoading() {
+  loadingElement.style.display = 'none';
+}
+
+function showMessage(message, isError = false) {
+  authMessage.textContent = message;
+  authMessage.style.display = 'block';
+  authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
+}
+
+// ========== FUNÇÕES PRINCIPAIS ==========
 async function loadAnimalData() {
   if (!animalId) return;
   
