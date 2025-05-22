@@ -20,4 +20,4 @@ provider.setCustomParameters({
   prompt: 'select_account'
 });
 
-export { auth, provider };
+export { db, auth, provider, storage };
