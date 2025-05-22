@@ -56,15 +56,6 @@ function showAnimalData() {
   dataContainer.style.display = "block";
   formContainer.style.display = "none";
   
-  // Mostra opção de login se não estiver autenticado
-  if (!currentUser) {
-    loginContainer.style.display = 'block';
-  } else {
-    // Verifica se pode editar
-    const canEdit = currentUser.uid === animalData?.createdBy || currentUser.uid === ADMIN_UID;
-    editBtn.style.display = canEdit ? "block" : "none";
-    loginContainer.style.display = 'none';
-  }
 }
 
 // 3. Configura autenticação
@@ -164,24 +155,29 @@ function setupListeners() {
   });
 }
 
-// Funções auxiliares que estavam faltando
 function updateUI() {
   if (currentUser) {
-    // Mostra informações do usuário
     userInfoElement.style.display = 'flex';
     userEmail.textContent = currentUser.email;
     userAvatar.src = currentUser.photoURL || 'https://via.placeholder.com/40';
-    
-    // Esconde o container de login
     loginContainer.style.display = 'none';
     
-    // Verifica se pode editar
-    const canEdit = currentUser.uid === animalData?.createdBy || currentUser.uid === ADMIN_UID;
-    editBtn.style.display = canEdit ? "block" : "none";
+    // Verifica se pode editar apenas se já tiver os dados do animal
+    if (animalData) {
+      const canEdit = currentUser.uid === animalData.createdBy || currentUser.uid === ADMIN_UID;
+      editBtn.style.display = canEdit ? "block" : "none";
+      dataContainer.style.display = "block";
+      formContainer.style.display = "none";
+    }
   } else {
-    // Usuário não logado
     userInfoElement.style.display = 'none';
     loginContainer.style.display = 'block';
+    editBtn.style.display = 'none';
+    
+    // Mostra dados do animal mesmo sem login
+    if (animalData) {
+      dataContainer.style.display = "block";
+    }
   }
 }
 
