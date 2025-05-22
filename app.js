@@ -82,17 +82,18 @@ async function loadAnimalData() {
 }
 
 // Mostra os dados do animal
+// Mostrar dados do animal (público)
 function showAnimalData() {
   document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
   document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
   document.getElementById("vRaca").textContent = animalData?.raca || "Não informado";
   document.getElementById("vObs").textContent = animalData?.observacoes || "Nenhuma observação";
+
+  // Mostrar botão de edição APENAS para o criador ou admin
+  const isOwner = currentUser?.uid === animalData?.createdBy;
+  const isAdmin = currentUser?.uid === "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
   
-  dataContainer.style.display = "block";
-  formContainer.style.display = "none";
-  loginContainer.style.display = "none";
-  
-  editBtn.style.display = currentUser ? "block" : "none";
+  editBtn.style.display = (isOwner || isAdmin) ? "block" : "none";
 }
 
 // Mostra o formulário para edição
