@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-const url = `https://qranimal.vercel.app/animal.html?id=${encodeURIComponent(id)}`;
+    const url = `${window.location.origin}/animal.html?id=${encodeURIComponent(animalId)}`;
+
     
     new QRious({
       element: qrCanvas,
