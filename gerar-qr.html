@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdnjs.cloudflare.com;">
   <title>Gerar QR Code</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 </head>
 <body>
   <h1>Gerar QR Code para Animal</h1>
-  <input type="text" id="animalId" placeholder="ID do Animal" />
+  <input type="text" id="animalId" placeholder="ID do Animal" pattern="[a-zA-Z0-9_-]{20}" required />
   <button onclick="gerarQRCode()">Gerar</button>
   <br><br>
   <canvas id="qr"></canvas>
@@ -16,16 +17,20 @@
   <script>
     function gerarQRCode() {
       const id = document.getElementById("animalId").value.trim();
-      if (!id) return alert("Digite um ID!");
+      if (!id || !/^[a-zA-Z0-9_-]{20}$/.test(id)) {
+        return alert("ID inválido! Deve ter 20 caracteres alfanuméricos.");
+      }
 
-      const url = `https://seusite.com/animal.html?id=${id}`;
+      const url = `${window.location.origin}/animal.html?id=${encodeURIComponent(id)}`;
       const qr = new QRious({
         element: document.getElementById("qr"),
         value: url,
-        size: 200
+        size: 200,
+        level: 'H' // Alto nível de correção de erro
       });
 
-      document.getElementById("link").innerHTML = `<a href="${url}" target="_blank">${url}</a>`;
+      document.getElementById("link").innerHTML = 
+        `Link: <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
     }
   </script>
 </body>
