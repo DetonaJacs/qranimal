@@ -121,37 +121,24 @@
   <div id="auth-message"></div>
 
   <div id="form-container">
-    <form id="animalForm">
-      <input type="text" id="nome" placeholder="Nome do animal" required maxlength="100"/>
-      <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/>
-      <input type="text" id="raca" placeholder="Raça" required maxlength="50"/>
-      <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea>
-      
-      <div class="photo-container">
-        <label for="animal-photo">Foto do Animal:</label>
-        <input type="file" id="animal-photo" accept="image/*">
-        <img id="animal-photo-preview" src="#" alt="Pré-visualização da foto">
-        <div class="progress-bar">
-          <div class="progress-bar-inner"></div>
-        </div>
-      </div>
-      
-      <button type="submit" id="submit-btn">Salvar</button>
-      <div id="error-message"></div>
-    </form>
-  </div>
+  <form id="animalForm">
+    <input type="text" id="nome" placeholder="Nome do animal" required maxlength="100"/>
+    <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/>
+    <input type="text" id="raca" placeholder="Raça" required maxlength="50"/>
+    <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea>
+    <button type="submit" id="submit-btn">Salvar</button>
+    <div id="error-message"></div>
+  </form>
+</div>
 
-  <div id="dados-animal">
-    <h2>Dados cadastrados</h2>
-    <div class="photo-container">
-      <img id="animal-photo-view" src="#" alt="Foto do animal">
-    </div>
-    <p><strong>Nome:</strong> <span id="vNome"></span></p>
-    <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
-    <p><strong>Raça:</strong> <span id="vRaca"></span></p>
-    <p><strong>Observações:</strong> <span id="vObs"></span></p>
-    <button id="editar-btn" class="google-btn" style="background-color: #FFA000;">Editar Dados</button>
-  </div>
+<div id="dados-animal">
+  <h2>Dados cadastrados</h2>
+  <p><strong>Nome:</strong> <span id="vNome"></span></p>
+  <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
+  <p><strong>Raça:</strong> <span id="vRaca"></span></p>
+  <p><strong>Observações:</strong> <span id="vObs"></span></p>
+  <button id="editar-btn" class="google-btn" style="background-color: #FFA000;">Editar Dados</button>
+</div>
 
   <!-- Adicione este script antes do fechamento do body -->
   <script>
