@@ -2,35 +2,133 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://cdnjs.cloudflare.com;">
-  <title>Gerar QR Code</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <title>Gerar QR Code - Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    #auth-check {
+      text-align: center;
+      margin-top: 50px;
+    }
+    #app-content {
+      display: none;
+    }
+    h1 {
+      color: #4285F4;
+    }
+    .input-group {
+      margin: 20px 0;
+    }
+    input {
+      padding: 10px;
+      width: 300px;
+      margin-right: 10px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #4285F4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #3367D6;
+    }
+    #qr {
+      margin: 20px auto;
+      display: block;
+      border: 1px solid #ddd;
+    }
+    #user-info {
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    #user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+    #logout-btn {
+      background: #d32f2f;
+      margin-left: auto;
+    }
+    #logout-btn:hover {
+      background: #b71c1c;
+    }
+  </style>
 </head>
 <body>
-  <h1>Gerar QR Code para Animal</h1>
-  <input type="text" id="animalId" placeholder="ID do Animal" pattern="[a-zA-Z0-9_-]{20}" required />
-  <button onclick="gerarQRCode()">Gerar</button>
-  <br><br>
-  <canvas id="qr"></canvas>
-  <p id="link"></p>
+  <div id="auth-check">
+    <h2>Verificando autenticação...</h2>
+  </div>
 
-  <script>
-    function gerarQRCode() {
-      const id = document.getElementById("animalId").value.trim();
-      if (!id || !/^[a-zA-Z0-9_-]{20}$/.test(id)) {
-        return alert("ID inválido! Deve ter 20 caracteres alfanuméricos.");
+  <div id="app-content">
+    <div id="user-info">
+      <img id="user-avatar" src="" alt="Foto do usuário">
+      <span id="user-name"></span>
+      <button id="logout-btn" onclick="logout()">Sair</button>
+    </div>
+
+    <h1>Gerar QR Code para Animal</h1>
+    <div class="input-group">
+      <input type="text" id="animalId" placeholder="ID do Animal">
+      <button onclick="gerarQRCode()">Gerar QR Code</button>
+    </div>
+    <canvas id="qr"></canvas>
+    <p id="link"></p>
+  </div>
+
+  <script type="module">
+    import { auth } from './firebase-config.js';
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+
+    // Verifica autenticação
+    onAuthStateChanged(auth, (user) => {
+      if (user && user.email === 'seu-email@gmail.com') { // Substitua pelo seu email
+        // Usuário autenticado
+        document.getElementById('auth-check').style.display = 'none';
+        document.getElementById('app-content').style.display = 'block';
+        
+        // Mostra informações do usuário
+        document.getElementById('user-avatar').src = user.photoURL || 'https://via.placeholder.com/40';
+        document.getElementById('user-name').textContent = user.displayName || 'Administrador';
+      } else {
+        // Não autenticado ou não é o email correto
+        window.location.href = 'login.html';
       }
+    });
 
+    function gerarQRCode() {
+      const id = document.getElementById('animalId').value.trim();
+      if (!id) return alert('Digite um ID válido!');
+      
       const url = `${window.location.origin}/animal.html?id=${encodeURIComponent(id)}`;
-      const qr = new QRious({
-        element: document.getElementById("qr"),
+      
+      new QRious({
+        element: document.getElementById('qr'),
         value: url,
-        size: 200,
-        level: 'H' // Alto nível de correção de erro
+        size: 250,
+        level: 'H'
       });
+      
+      document.getElementById('link').innerHTML = `Link: <a href="${url}" target="_blank">${url}</a>`;
+    }
 
-      document.getElementById("link").innerHTML = 
-        `Link: <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    async function logout() {
+      try {
+        await signOut(auth);
+        window.location.href = 'login.html';
+      } catch (error) {
+        console.error('Erro ao sair:', error);
+      }
     }
   </script>
 </body>
