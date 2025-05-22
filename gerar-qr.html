@@ -3,73 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gerar QR Code - Admin</title>
+  <title>Gerador Automático de QR Code</title>
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
   <style>
     body {
-      font-family: 'Arial', sans-serif;
+      font-family: Arial, sans-serif;
       max-width: 600px;
       margin: 0 auto;
       padding: 20px;
+      text-align: center;
     }
-    #user-info {
-      display: flex;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    #user-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      margin-right: 10px;
-    }
-    #logout-btn {
-      background: #d32f2f;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-left: auto;
-    }
-    #qr-form {
-      margin: 20px 0;
-    }
-    #animalId {
-      padding: 10px;
-      width: 300px;
-    }
-    #generate-btn {
-      padding: 10px 20px;
-      background: #4285F4;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #qr {
+    #qr-container {
       margin: 20px auto;
-      display: block;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    #animal-id {
+      font-weight: bold;
+      font-size: 1.2em;
+      margin: 10px 0;
+    }
+    button {
+      background-color: #4285F4;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px;
+    }
+    button:hover {
+      background-color: #3367D6;
+    }
+    #link-container {
+      margin-top: 20px;
+      word-break: break-all;
     }
   </style>
 </head>
 <body>
-  <div id="user-info">
-    <img id="user-avatar" src="" alt="Foto do usuário">
-    <span id="user-name"></span>
-    <button id="logout-btn">Sair</button>
+  <h1>Gerador Automático de QR Code</h1>
+  <p>Clique no botão para gerar um novo QR Code para um animal</p>
+  
+  <button id="gerar-btn">Gerar Novo QR Code</button>
+  
+  <div id="qr-container" style="display:none;">
+    <canvas id="qr"></canvas>
+    <div id="animal-id"></div>
+    <div id="link-container"></div>
   </div>
 
-  <h1>Gerar QR Code para Animal</h1>
-  
-  <div id="qr-form">
-    <input type="text" id="animalId" placeholder="ID do Animal">
-    <button id="generate-btn">Gerar QR Code</button>
-  </div>
-  
-  <canvas id="qr"></canvas>
-  <p id="qr-link"></p>
+  <script>
+    document.getElementById('gerar-btn').addEventListener('click', gerarQRCode);
 
-  <script type="module" src="qr-generator.js"></script>
+    function gerarQRCode() {
+      // Gerar um ID único para o animal
+      const animalId = gerarIdUnico();
+      
+      // Criar a URL que aponta para a página do animal
+      const url = `${window.location.origin}/animal.html?id=${animalId}`;
+      
+      // Atualizar a interface
+      document.getElementById('animal-id').textContent = `ID do Animal: ${animalId}`;
+      document.getElementById('link-container').innerHTML = 
+        `Link: <a href="${url}" target="_blank">${url}</a>`;
+      
+      // Gerar o QR Code
+      new QRious({
+        element: document.getElementById('qr'),
+        value: url,
+        size: 200,
+        level: 'H'
+      });
+      
+      // Mostrar o container
+      document.getElementById('qr-container').style.display = 'block';
+      
+      // Opcional: Copiar o ID para a área de transferência
+      navigator.clipboard.writeText(animalId).then(() => {
+        alert(`ID ${animalId} copiado para a área de transferência!`);
+      });
+    }
+
+    function gerarIdUnico() {
+      // Gerar um ID alfanumérico de 20 caracteres
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      let result = '';
+      for (let i = 0; i < 20; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+    // Gerar automaticamente ao carregar a página (opcional)
+    window.addEventListener('DOMContentLoaded', gerarQRCode);
+  </script>
 </body>
 </html>
