@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Gerar QR Code</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+</head>
+<body>
+  <h1>Gerar QR Code para Animal</h1>
+  <input type="text" id="animalId" placeholder="ID do Animal" />
+  <button onclick="gerarQRCode()">Gerar</button>
+  <br><br>
+  <canvas id="qr"></canvas>
+  <p id="link"></p>
+
+  <script>
+    function gerarQRCode() {
+      const id = document.getElementById("animalId").value.trim();
+      if (!id) return alert("Digite um ID!");
+
+      const url = `https://seusite.com/animal.html?id=${id}`;
+      const qr = new QRious({
+        element: document.getElementById("qr"),
+        value: url,
+        size: 200
+      });
+
+      document.getElementById("link").innerHTML = `<a href="${url}" target="_blank">${url}</a>`;
+    }
+  </script>
+</body>
+</html>
