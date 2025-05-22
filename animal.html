@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com; script-src 'self' https://www.gstatic.com 'unsafe-inline';">
   <title>QR Animal</title>
 </head>
 <body>
   <h1>Cadastro do Animal</h1>
   <div id="form-container" style="display:none;">
     <form id="animalForm">
-      <input type="text" id="nome" placeholder="Nome do animal" required /><br>
-      <input type="text" id="especie" placeholder="Espécie" required /><br>
-      <input type="text" id="raca" placeholder="Raça" required /><br>
-      <textarea id="observacoes" placeholder="Observações"></textarea><br>
-      <button type="submit">Salvar</button>
+      <input type="text" id="nome" placeholder="Nome do animal" required maxlength="100"/><br>
+      <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/><br>
+      <input type="text" id="raca" placeholder="Raça" required maxlength="50"/><br>
+      <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea><br>
+      <button type="submit" id="submit-btn">Salvar</button>
+      <div id="error-message" style="color:red;"></div>
     </form>
   </div>
 
@@ -28,13 +30,22 @@
   <script type="module">
     import { db } from './firebase-config.js';
     import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+
+    // Verifica autenticação para edição
+    const auth = getAuth();
+    let isAuthenticated = false;
+
+    onAuthStateChanged(auth, (user) => {
+      isAuthenticated = !!user;
+    });
 
     const params = new URLSearchParams(window.location.search);
     const animalId = params.get("id");
 
-    if (!animalId) {
-      document.body.innerHTML = "<h2>ID do animal não especificado na URL.</h2>";
-      throw new Error("ID não encontrado");
+    if (!animalId || !/^[a-zA-Z0-9_-]{20}$/.test(animalId)) {
+      document.body.innerHTML = "<h2>ID do animal inválido ou não especificado.</h2>";
+      throw new Error("ID inválido");
     }
 
     const docRef = doc(db, "animais", animalId);
@@ -42,25 +53,50 @@
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      document.getElementById("vNome").innerText = data.nome;
-      document.getElementById("vEspecie").innerText = data.especie;
-      document.getElementById("vRaca").innerText = data.raca;
-      document.getElementById("vObs").innerText = data.observacoes;
+      // Sanitiza a saída para prevenir XSS
+      document.getElementById("vNome").textContent = data.nome;
+      document.getElementById("vEspecie").textContent = data.especie;
+      document.getElementById("vRaca").textContent = data.raca;
+      document.getElementById("vObs").textContent = data.observacoes;
       document.getElementById("dados-animal").style.display = "block";
-    } else {
+    } else if (isAuthenticated) {
       document.getElementById("form-container").style.display = "block";
       document.getElementById("animalForm").addEventListener("submit", async (e) => {
         e.preventDefault();
-        const nome = document.getElementById("nome").value;
-        const especie = document.getElementById("especie").value;
-        const raca = document.getElementById("raca").value;
-        const observacoes = document.getElementById("observacoes").value;
+        
+        const submitBtn = document.getElementById("submit-btn");
+        submitBtn.disabled = true;
+        
+        try {
+          const nome = sanitizeInput(document.getElementById("nome").value);
+          const especie = sanitizeInput(document.getElementById("especie").value);
+          const raca = sanitizeInput(document.getElementById("raca").value);
+          const observacoes = sanitizeInput(document.getElementById("observacoes").value);
 
-        await setDoc(docRef, { nome, especie, raca, observacoes });
+          if (!nome || !especie || !raca) {
+            throw new Error("Preencha todos os campos obrigatórios");
+          }
 
-        alert("Dados salvos com sucesso!");
-        location.reload(); // recarrega para mostrar os dados
+          await setDoc(docRef, { 
+            nome, 
+            especie, 
+            raca, 
+            observacoes,
+            createdAt: new Date(),
+            createdBy: auth.currentUser.uid
+          });
+
+          alert("Dados salvos com sucesso!");
+          location.reload();
+        } catch (error) {
+          document.getElementById("error-message").textContent = error.message;
+          submitBtn.disabled = false;
+        }
       });
+    }
+
+    function sanitizeInput(str) {
+      return String(str).replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
     }
   </script>
 </body>
