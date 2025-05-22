@@ -17,9 +17,9 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// Configuração opcional para sugerir email
+// Configurações adicionais do provedor Google
 provider.setCustomParameters({
   prompt: 'select_account'
 });
 
-export { auth, db, provider };
+export { db, auth, provider };
