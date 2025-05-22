@@ -12,18 +12,15 @@ const firebaseConfig = {
   measurementId: "G-7NV3NQN1TE"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-// Initialize services
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Configure Google provider
+// Configuração do provedor Google
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
   prompt: 'select_account',
-  redirect_uri: window.location.origin // Adiciona o domínio atual como URI de redirecionamento
+  redirect_uri: window.location.origin // Adiciona o URI de redirecionamento explícito
 });
 
 export { db, auth, provider };
