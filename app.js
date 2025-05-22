@@ -2,137 +2,178 @@ import { db, auth, provider } from './firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
+// Configurações
 const ADMIN_UID = "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
 
-// Elementos do DOM
-const loadingElement = document.getElementById('loading');
-const userInfoElement = document.getElementById('user-info');
-const loginContainer = document.getElementById('login-container');
-const authMessage = document.getElementById('auth-message');
-const formContainer = document.getElementById('form-container');
-const dataContainer = document.getElementById('dados-animal');
-const googleLoginBtn = document.getElementById('googleLogin');
-const logoutBtn = document.getElementById('logout-btn');
-const editBtn = document.getElementById('editar-btn');
-const userAvatar = document.getElementById('user-avatar');
-const userEmail = document.getElementById('user-email');
-const animalForm = document.getElementById('animalForm');
+// Elementos DOM
+const elements = {
+  loading: document.getElementById('loading'),
+  userInfo: document.getElementById('user-info'),
+  loginContainer: document.getElementById('login-container'),
+  authMessage: document.getElementById('auth-message'),
+  formContainer: document.getElementById('form-container'),
+  dataContainer: document.getElementById('dados-animal'),
+  googleLoginBtn: document.getElementById('googleLogin'),
+  logoutBtn: document.getElementById('logout-btn'),
+  editBtn: document.getElementById('editar-btn'),
+  userAvatar: document.getElementById('user-avatar'),
+  userEmail: document.getElementById('user-email'),
+  animalForm: document.getElementById('animalForm')
+};
 
-// Variáveis de estado
-let currentUser = null;
-let animalId = null;
-let animalData = null;
+// Estado da aplicação
+const state = {
+  currentUser: null,
+  animalId: null,
+  animalData: null
+};
 
-
-
-// ========== FUNÇÕES PRINCIPAIS ==========
-async function loadAnimalData() {
-  if (!animalId) return;
-  
-  try {
-    const docRef = doc(db, "animais", animalId);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      animalData = docSnap.data();
-      showAnimalData();
-    } else {
-      showMessage("Animal não encontrado.", true);
-    }
-  } catch (error) {
-    showMessage(`Erro ao carregar dados: ${error.message}`, true);
-  } finally {
-    hideLoading();
+// Funções utilitárias
+const utils = {
+  showElement: (element) => element.classList.remove('hidden'),
+  hideElement: (element) => element.classList.add('hidden'),
+  showMessage: (message, isError = false) => {
+    elements.authMessage.textContent = message;
+    elements.authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
+    utils.showElement(elements.authMessage);
   }
-}
+};
 
-// 2. Mostra dados do animal (público)
-function showAnimalData() {
-  document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
-  document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
-  document.getElementById("vRaca").textContent = animalData?.raca || "Não informado";
-  document.getElementById("vObs").textContent = animalData?.observacoes || "Nenhuma observação";
-
-  dataContainer.style.display = "block";
-  formContainer.style.display = "none";
-  
-}
-
-// 3. Configura autenticação
-async function setupAuth() {
-  try {
-    const result = await getRedirectResult(auth);
-    if (result?.user) {
-      currentUser = result.user;
-      updateUI();
-    }
-
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
-      
-      // Recarrega os dados do animal após autenticação
-      if (user && !animalData) {
-        await loadAnimalData();
-      }
-      
-      updateUI();
-    });
-  } catch (error) {
-    console.error("Auth error:", error);
-    showMessage(`Erro na autenticação: ${error.message}`, true);
-  }
-}
-
-// 4. Formulário de edição
-function showAnimalForm() {
-  if (!currentUser) {
-    showMessage("Faça login para editar", true);
-    loginContainer.style.display = 'block';
-    return;
-  }
-
-  if (!animalData) {
-    showMessage("Dados do animal não carregados", true);
-    return;
-  }
-
-  const canEdit = currentUser.uid === animalData.createdBy || currentUser.uid === ADMIN_UID;
-  if (!canEdit) {
-    showMessage("Apenas o dono pode editar este animal", true);
-    return;
-  }
-
-  formContainer.style.display = "block";
-  dataContainer.style.display = "none";
-  
-  // Preenche formulário
-  document.getElementById('nome').value = animalData.nome || '';
-  document.getElementById('especie').value = animalData.especie || '';
-  document.getElementById('raca').value = animalData.raca || '';
-  document.getElementById('observacoes').value = animalData.observacoes || '';
-}
-
-// 5. Configura eventos
-function setupListeners() {
-  googleLoginBtn.addEventListener('click', async () => {
+// Funções de autenticação
+const authFunctions = {
+  initializeAuth: async () => {
     try {
+      // Verifica resultado de redirecionamento
+      const result = await getRedirectResult(auth);
+      if (result?.user) {
+        state.currentUser = result.user;
+      }
+
+      // Observa mudanças de estado
+      onAuthStateChanged(auth, (user) => {
+        state.currentUser = user;
+        ui.updateUI();
+        
+        // Se usuário logado e dados não carregados
+        if (user && !state.animalData) {
+          animalFunctions.loadAnimalData();
+        }
+      });
+    } catch (error) {
+      utils.showMessage(`Erro na autenticação: ${error.message}`, true);
+    }
+  },
+  
+  handleLogin: async () => {
+    try {
+      utils.showElement(elements.loading);
       await signInWithRedirect(auth, provider);
     } catch (error) {
-      showMessage(`Erro no login: ${error.message}`, true);
+      utils.hideElement(elements.loading);
+      utils.showMessage(`Erro no login: ${error.message}`, true);
     }
-  });
-
-  logoutBtn.addEventListener('click', async () => {
+  },
+  
+  handleLogout: async () => {
     try {
+      utils.showElement(elements.loading);
       await signOut(auth);
     } catch (error) {
-      console.error('Erro ao sair:', error);
+      utils.showMessage(`Erro ao sair: ${error.message}`, true);
+    } finally {
+      utils.hideElement(elements.loading);
     }
-  });
+  }
+};
 
-  editBtn?.addEventListener('click', showAnimalForm);
+// Funções de interface
+const ui = {
+  updateUI: () => {
+    if (state.currentUser) {
+      // Usuário logado
+      utils.showElement(elements.userInfo);
+      elements.userEmail.textContent = state.currentUser.email;
+      elements.userAvatar.src = state.currentUser.photoURL || 'https://via.placeholder.com/40';
+      utils.hideElement(elements.loginContainer);
+      
+      // Se tem dados do animal, verifica permissões
+      if (state.animalData) {
+        const canEdit = state.currentUser.uid === state.animalData.createdBy || state.currentUser.uid === ADMIN_UID;
+        elements.editBtn.style.display = canEdit ? "block" : "none";
+      }
+    } else {
+      // Usuário não logado
+      utils.hideElement(elements.userInfo);
+      utils.showElement(elements.loginContainer);
+      if (elements.editBtn) elements.editBtn.style.display = 'none';
+    }
+  },
+  
+  showAnimalData: () => {
+    if (!state.animalData) return;
+    
+    document.getElementById("vNome").textContent = state.animalData.nome || "Não informado";
+    document.getElementById("vEspecie").textContent = state.animalData.especie || "Não informado";
+    document.getElementById("vRaca").textContent = state.animalData.raca || "Não informado";
+    document.getElementById("vObs").textContent = state.animalData.observacoes || "Nenhuma observação";
 
-  animalForm?.addEventListener('submit', async (e) => {
+    utils.showElement(elements.dataContainer);
+    utils.hideElement(elements.formContainer);
+  },
+  
+  showAnimalForm: () => {
+    if (!state.currentUser) {
+      utils.showMessage("Faça login para editar", true);
+      return;
+    }
+
+    if (!state.animalData) {
+      utils.showMessage("Dados do animal não carregados", true);
+      return;
+    }
+
+    const canEdit = state.currentUser.uid === state.animalData.createdBy || state.currentUser.uid === ADMIN_UID;
+    if (!canEdit) {
+      utils.showMessage("Apenas o dono pode editar este animal", true);
+      return;
+    }
+
+    // Preenche formulário
+    document.getElementById('nome').value = state.animalData.nome || '';
+    document.getElementById('especie').value = state.animalData.especie || '';
+    document.getElementById('raca').value = state.animalData.raca || '';
+    document.getElementById('observacoes').value = state.animalData.observacoes || '';
+
+    utils.showElement(elements.formContainer);
+    utils.hideElement(elements.dataContainer);
+  }
+};
+
+// Funções de dados do animal
+const animalFunctions = {
+  loadAnimalData: async () => {
+    if (!state.animalId) return;
+    
+    try {
+      utils.showElement(elements.loading);
+      const docRef = doc(db, "animais", state.animalId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        state.animalData = docSnap.data();
+        ui.showAnimalData();
+      } else {
+        utils.showMessage("Animal não encontrado.", true);
+      }
+    } catch (error) {
+      utils.showMessage(`Erro ao carregar dados: ${error.message}`, true);
+    } finally {
+      utils.hideElement(elements.loading);
+      ui.updateUI();
+    }
+  },
+  
+  saveAnimalData: async (e) => {
     e.preventDefault();
     
     try {
@@ -145,84 +186,47 @@ function setupListeners() {
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
-      await setDoc(doc(db, "animais", animalId), { 
+      utils.showElement(elements.loading);
+      
+      await setDoc(doc(db, "animais", state.animalId), { 
         nome, especie, raca, observacoes,
         updatedAt: new Date(),
-        updatedBy: currentUser.uid,
-        // Mantém dados originais
-        createdBy: animalData.createdBy,
-        createdAt: animalData.createdAt
+        updatedBy: state.currentUser.uid,
+        createdBy: state.animalData.createdBy,
+        createdAt: state.animalData.createdAt
       });
 
       alert("Dados atualizados com sucesso!");
       location.reload();
     } catch (error) {
       document.getElementById("error-message").textContent = error.message;
-    }
-  });
-}
-
-function updateUI() {
-  if (currentUser) {
-    userInfoElement.style.display = 'flex';
-    userEmail.textContent = currentUser.email;
-    userAvatar.src = currentUser.photoURL || 'https://via.placeholder.com/40';
-    loginContainer.style.display = 'none';
-    
-    // Verifica se pode editar apenas se já tiver os dados do animal
-    if (animalData) {
-      const canEdit = currentUser.uid === animalData.createdBy || currentUser.uid === ADMIN_UID;
-      editBtn.style.display = canEdit ? "block" : "none";
-      dataContainer.style.display = "block";
-      formContainer.style.display = "none";
-    }
-  } else {
-    userInfoElement.style.display = 'none';
-    loginContainer.style.display = 'block';
-    editBtn.style.display = 'none';
-    
-    // Mostra dados do animal mesmo sem login
-    if (animalData) {
-      dataContainer.style.display = "block";
+    } finally {
+      utils.hideElement(elements.loading);
     }
   }
-}
-
-function hideLoading() {
-  loadingElement.style.display = 'none';
-}
-
-function showMessage(message, isError = false) {
-  authMessage.textContent = message;
-  authMessage.style.display = 'block';
-  authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
-}
-
-googleLoginBtn.addEventListener('click', async () => {
-  googleLoginBtn.disabled = true;
-  googleLoginBtn.textContent = 'Entrando...';
-  
-  try {
-    await signInWithRedirect(auth, provider);
-  } catch (error) {
-    showMessage(`Erro no login: ${error.message}`, true);
-    googleLoginBtn.disabled = false;
-    googleLoginBtn.textContent = 'Entrar com Google';
-  }
-});
+};
 
 // Inicialização
-document.addEventListener('DOMContentLoaded', () => {
+const init = () => {
   // Obtém ID do animal da URL
   const params = new URLSearchParams(window.location.search);
-  animalId = params.get("id");
+  state.animalId = params.get("id");
   
-  if (!animalId) {
-    showMessage("ID do animal não especificado", true);
+  if (!state.animalId) {
+    utils.showMessage("ID do animal não especificado", true);
     return;
   }
 
-  setupListeners();
-  loadAnimalData(); // Carrega dados imediatamente
-  setupAuth(); // Configura autenticação em segundo plano
-});
+  // Event listeners
+  elements.googleLoginBtn?.addEventListener('click', authFunctions.handleLogin);
+  elements.logoutBtn?.addEventListener('click', authFunctions.handleLogout);
+  elements.editBtn?.addEventListener('click', ui.showAnimalForm);
+  elements.animalForm?.addEventListener('submit', animalFunctions.saveAnimalData);
+
+  // Inicia processos
+  authFunctions.initializeAuth();
+  animalFunctions.loadAnimalData();
+};
+
+// Inicia a aplicação
+document.addEventListener('DOMContentLoaded', init);
