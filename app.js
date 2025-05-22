@@ -1,7 +1,6 @@
-import { db, auth, provider, storage } from './firebase-config.js';
+import { db, auth, provider } from './firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 import { signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import { ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
 // Elementos do DOM
 const loadingElement = document.getElementById('loading');
@@ -15,8 +14,6 @@ const logoutBtn = document.getElementById('logout-btn');
 const editBtn = document.getElementById('editar-btn');
 const userAvatar = document.getElementById('user-avatar');
 const userEmail = document.getElementById('user-email');
-const progressBar = document.querySelector('.progress-bar');
-const progressBarInner = document.querySelector('.progress-bar-inner');
 
 // Variáveis de estado
 let currentUser = null;
@@ -29,22 +26,19 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAuth();
 });
 
-// Configurar upload de foto
-function setupPhotoUpload() {
-  photoInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      selectedPhotoFile = file;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        photoPreview.src = event.target.result;
-        photoPreview.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    }
-  });
+// Verificar ID do animal na URL
+function checkAnimalId() {
+  const params = new URLSearchParams(window.location.search);
+  animalId = params.get("id");
+  
+  if (!animalId || !/^[a-zA-Z0-9_-]{8,32}$/.test(animalId)) {
+    showMessage("ID do animal inválido ou não especificado.", true);
+    hideLoading();
+    return;
+  }
+  
+  loadAnimalData();
 }
-
 
 // Configurar autenticação
 function setupAuth() {
@@ -104,12 +98,6 @@ async function loadAnimalData() {
     if (docSnap.exists()) {
       animalData = docSnap.data();
       showAnimalData();
-      
-      // Carrega a foto se existir
-      if (animalData.fotoUrl) {
-        photoView.src = animalData.fotoUrl;
-        photoView.style.display = 'block';
-      }
     } else if (currentUser) {
       // Se está logado e não existe cadastro, mostra formulário
       showAnimalForm();
@@ -145,46 +133,45 @@ function showAnimalForm() {
   loginContainer.style.display = "none";
   
   const form = document.getElementById("animalForm");
-form.onsubmit = async (e) => {
-  e.preventDefault();
-  
-  const submitBtn = document.getElementById("submit-btn");
-  submitBtn.disabled = true;
-  const errorElement = document.getElementById("error-message");
-  errorElement.textContent = "";
-  
-  try {
-    const nome = sanitizeInput(document.getElementById("nome").value);
-    const especie = sanitizeInput(document.getElementById("especie").value);
-    const raca = sanitizeInput(document.getElementById("raca").value);
-    const observacoes = sanitizeInput(document.getElementById("observacoes").value);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById("submit-btn");
+    submitBtn.disabled = true;
+    const errorElement = document.getElementById("error-message");
+    errorElement.textContent = "";
+    
+    try {
+      const nome = sanitizeInput(document.getElementById("nome").value);
+      const especie = sanitizeInput(document.getElementById("especie").value);
+      const raca = sanitizeInput(document.getElementById("raca").value);
+      const observacoes = sanitizeInput(document.getElementById("observacoes").value);
 
-    if (!nome || !especie || !raca) {
-      throw new Error("Preencha todos os campos obrigatórios");
+      if (!nome || !especie || !raca) {
+        throw new Error("Preencha todos os campos obrigatórios");
+      }
+
+      await setDoc(doc(db, "animais", animalId), { 
+        nome, 
+        especie, 
+        raca, 
+        observacoes,
+        updatedAt: new Date(),
+        updatedBy: currentUser.uid,
+        ...(animalData ? {} : { 
+          createdAt: new Date(),
+          createdBy: currentUser.uid 
+        })
+      });
+
+      alert("Dados salvos com sucesso!");
+      location.reload();
+    } catch (error) {
+      errorElement.textContent = error.message;
+      submitBtn.disabled = false;
     }
-
-    await setDoc(doc(db, "animais", animalId), { 
-      nome, 
-      especie, 
-      raca, 
-      observacoes,
-      updatedAt: new Date(),
-      updatedBy: currentUser.uid,
-      ...(animalData ? {} : { 
-        createdAt: new Date(),
-        createdBy: currentUser.uid 
-      })
-    });
-
-    alert("Dados salvos com sucesso!");
-    location.reload();
-  } catch (error) {
-    errorElement.textContent = error.message;
-    submitBtn.disabled = false;
-  }
-};
-
-
+  };
+}
 
 // Atualizar interface
 function updateUI() {
