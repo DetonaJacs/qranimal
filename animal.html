@@ -7,7 +7,7 @@
     content="default-src 'self';
              script-src 'self' https://www.gstatic.com;
              style-src 'self' 'unsafe-inline';
-             img-src 'self' https://www.google.com https://*.googleapis.com;
+             img-src 'self' data: https://www.google.com https://*.googleapis.com;
              connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com;
              font-src 'self' https://fonts.gstatic.com;
              frame-src 'self' https://www.google.com;">
@@ -44,7 +44,7 @@
       color: #d32f2f;
       margin: 10px 0;
     }
-    input, textarea {
+    input, textarea, #animal-photo {
       width: 100%;
       padding: 8px;
       margin: 8px 0;
@@ -64,6 +64,31 @@
     #logout-btn {
       background-color: #d32f2f;
       margin-left: auto;
+    }
+    #animal-photo-preview, #animal-photo-view {
+      max-width: 100%;
+      max-height: 300px;
+      margin: 10px 0;
+      border-radius: 8px;
+      display: none;
+    }
+    .photo-container {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .progress-bar {
+      width: 100%;
+      background-color: #f3f3f3;
+      border-radius: 4px;
+      margin: 10px 0;
+      display: none;
+    }
+    .progress-bar-inner {
+      height: 20px;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      width: 0%;
+      transition: width 0.3s;
     }
   </style>
 </head>
@@ -101,6 +126,16 @@
       <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/>
       <input type="text" id="raca" placeholder="Raça" required maxlength="50"/>
       <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea>
+      
+      <div class="photo-container">
+        <label for="animal-photo">Foto do Animal:</label>
+        <input type="file" id="animal-photo" accept="image/*">
+        <img id="animal-photo-preview" src="#" alt="Pré-visualização da foto">
+        <div class="progress-bar">
+          <div class="progress-bar-inner"></div>
+        </div>
+      </div>
+      
       <button type="submit" id="submit-btn">Salvar</button>
       <div id="error-message"></div>
     </form>
@@ -108,6 +143,9 @@
 
   <div id="dados-animal">
     <h2>Dados cadastrados</h2>
+    <div class="photo-container">
+      <img id="animal-photo-view" src="#" alt="Foto do animal">
+    </div>
     <p><strong>Nome:</strong> <span id="vNome"></span></p>
     <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
     <p><strong>Raça:</strong> <span id="vRaca"></span></p>
@@ -116,9 +154,10 @@
   </div>
 
   <script type="module">
-    import { db, auth, provider } from './firebase-config.js';
+    import { db, auth, provider, storage } from './firebase-config.js';
     import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
     import { signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+    import { ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js";
 
     // Elementos do DOM
     const loadingElement = document.getElementById('loading');
@@ -132,17 +171,40 @@
     const editBtn = document.getElementById('editar-btn');
     const userAvatar = document.getElementById('user-avatar');
     const userEmail = document.getElementById('user-email');
+    const photoInput = document.getElementById('animal-photo');
+    const photoPreview = document.getElementById('animal-photo-preview');
+    const photoView = document.getElementById('animal-photo-view');
+    const progressBar = document.querySelector('.progress-bar');
+    const progressBarInner = document.querySelector('.progress-bar-inner');
 
     // Variáveis de estado
     let currentUser = null;
     let animalId = null;
     let animalData = null;
+    let selectedPhotoFile = null;
 
     // Inicialização
     document.addEventListener('DOMContentLoaded', () => {
       checkAnimalId();
       setupAuth();
+      setupPhotoUpload();
     });
+
+    // Configurar upload de foto
+    function setupPhotoUpload() {
+      photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          selectedPhotoFile = file;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            photoPreview.src = event.target.result;
+            photoPreview.style.display = 'block';
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
 
     // Verificar ID do animal na URL
     function checkAnimalId() {
@@ -171,6 +233,10 @@
           loadAnimalData();
         } else {
           userInfoElement.style.display = 'none';
+          // Se não está logado e não há dados, mostra o login
+          if (!animalData) {
+            loginContainer.style.display = 'block';
+          }
         }
       });
 
@@ -212,10 +278,18 @@
         if (docSnap.exists()) {
           animalData = docSnap.data();
           showAnimalData();
+          
+          // Carrega a foto se existir
+          if (animalData.fotoUrl) {
+            photoView.src = animalData.fotoUrl;
+            photoView.style.display = 'block';
+          }
         } else if (currentUser) {
+          // Se está logado e não existe cadastro, mostra formulário
           showAnimalForm();
         } else {
-          showAnimalData(); // Mostra dados vazios para visitantes
+          // Se não está logado e não existe cadastro, mostra mensagem
+          showMessage("Animal não encontrado. Faça login para cadastrar.", false);
         }
       } catch (error) {
         hideLoading();
@@ -232,15 +306,17 @@
       
       dataContainer.style.display = "block";
       formContainer.style.display = "none";
+      loginContainer.style.display = "none";
       
-      // Mostrar botão de edição apenas se estiver logado e houver dados
-      editBtn.style.display = animalData && currentUser ? "block" : "none";
+      // Mostrar botão de edição apenas se estiver logado
+      editBtn.style.display = currentUser ? "block" : "none";
     }
 
     // Mostrar formulário para cadastro/edição
     function showAnimalForm() {
       formContainer.style.display = "block";
       dataContainer.style.display = "none";
+      loginContainer.style.display = "none";
       
       const form = document.getElementById("animalForm");
       form.onsubmit = async (e) => {
@@ -261,11 +337,19 @@
             throw new Error("Preencha todos os campos obrigatórios");
           }
 
+          let fotoUrl = animalData?.fotoUrl || null;
+          
+          // Se uma nova foto foi selecionada, faz upload
+          if (selectedPhotoFile) {
+            fotoUrl = await uploadPhoto(selectedPhotoFile);
+          }
+
           await setDoc(doc(db, "animais", animalId), { 
             nome, 
             especie, 
             raca, 
             observacoes,
+            fotoUrl,
             updatedAt: new Date(),
             updatedBy: currentUser.uid,
             ...(animalData ? {} : { 
@@ -283,12 +367,42 @@
       };
     }
 
+    // Upload da foto para o Firebase Storage
+    async function uploadPhoto(file) {
+      return new Promise((resolve, reject) => {
+        const storageRef = ref(storage, `animais/${animalId}/${file.name}`);
+        const uploadTask = uploadBytesResumable(storageRef, file);
+        
+        progressBar.style.display = 'block';
+        
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            progressBarInner.style.width = `${progress}%`;
+          },
+          (error) => {
+            progressBar.style.display = 'none';
+            reject(error);
+          },
+          async () => {
+            progressBar.style.display = 'none';
+            try {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(downloadURL);
+            } catch (error) {
+              reject(error);
+            }
+          }
+        );
+      });
+    }
+
     // Atualizar interface
     function updateUI() {
       if (currentUser) {
         loginContainer.style.display = 'none';
-      } else {
-        loginContainer.style.display = animalData ? 'none' : 'block';
+      } else if (!animalData) {
+        loginContainer.style.display = 'block';
       }
     }
 
