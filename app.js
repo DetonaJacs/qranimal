@@ -162,6 +162,37 @@ function setupListeners() {
   });
 }
 
+// Funções auxiliares que estavam faltando
+function updateUI() {
+  if (currentUser) {
+    // Mostra informações do usuário
+    userInfoElement.style.display = 'flex';
+    userEmail.textContent = currentUser.email;
+    userAvatar.src = currentUser.photoURL || 'https://via.placeholder.com/40';
+    
+    // Esconde o container de login
+    loginContainer.style.display = 'none';
+    
+    // Verifica se pode editar
+    const canEdit = currentUser.uid === animalData?.createdBy || currentUser.uid === ADMIN_UID;
+    editBtn.style.display = canEdit ? "block" : "none";
+  } else {
+    // Usuário não logado
+    userInfoElement.style.display = 'none';
+    loginContainer.style.display = 'block';
+  }
+}
+
+function hideLoading() {
+  loadingElement.style.display = 'none';
+}
+
+function showMessage(message, isError = false) {
+  authMessage.textContent = message;
+  authMessage.style.display = 'block';
+  authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
+}
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
   // Obtém ID do animal da URL
