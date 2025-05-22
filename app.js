@@ -4,6 +4,7 @@ import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } fr
 
 // Elementos do DOM
 const ADMIN_UID = "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
+
 const loadingElement = document.getElementById('loading');
 const userInfoElement = document.getElementById('user-info');
 const loginContainer = document.getElementById('login-container');
