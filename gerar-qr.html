@@ -3,14 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" 
-    content="default-src 'self';
-             script-src 'self' https://www.gstatic.com https://cdn.jsdelivr.net;
-             style-src 'self' 'unsafe-inline';
-             img-src 'self' https://www.google.com;
-             connect-src 'self' https://*.googleapis.com;">
   <title>Gerador de QR Code - Admin</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <!-- CSS integrado -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -18,13 +12,22 @@
       margin: 0 auto;
       padding: 20px;
       text-align: center;
+      background-color: #f5f5f5;
     }
     #login-container, #app-content, #access-denied {
-      display: none;
-      margin: 20px 0;
+      background: white;
       padding: 20px;
-      border: 1px solid #ddd;
       border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin: 20px 0;
+    }
+    #login-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #app-content, #access-denied {
+      display: none;
     }
     .google-btn {
       background-color: #4285F4;
@@ -35,38 +38,29 @@
       cursor: pointer;
       display: flex;
       align-items: center;
-      justify-content: center;
-      margin: 10px auto;
+      font-size: 16px;
+      margin: 10px 0;
+      transition: background-color 0.3s;
+    }
+    .google-btn:hover {
+      background-color: #3367D6;
     }
     #qr-container {
       margin: 20px auto;
       padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      display: inline-block;
-    }
-    #generate-btn {
-      background-color: #4285F4;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 16px;
-      margin: 10px;
+      display: none;
     }
     #logout-btn {
       background-color: #d32f2f;
-      color: white;
       margin-top: 20px;
     }
     #access-denied {
       color: #d32f2f;
-      font-weight: bold;
     }
   </style>
 </head>
 <body>
+  <!-- Container de Login -->
   <div id="login-container">
     <h2>Acesso Administrativo</h2>
     <p>Por favor, faça login para continuar</p>
@@ -81,70 +75,82 @@
     </button>
   </div>
 
+  <!-- Acesso Negado -->
   <div id="access-denied">
     <h2>Acesso Negado</h2>
-    <p>Você não tem permissão para acessar esta página.</p>
+    <p>Esta funcionalidade é restrita ao administrador.</p>
   </div>
 
+  <!-- Conteúdo Principal -->
   <div id="app-content">
     <h1>Gerador de QR Code</h1>
-    <button id="generate-btn">Gerar Novo QR Code</button>
-    <button id="logout-btn" class="google-btn">Sair</button>
+    <button id="generate-btn" class="google-btn">Gerar Novo QR Code</button>
     
-    <div id="qr-container" style="display:none;">
+    <div id="qr-container">
       <canvas id="qr"></canvas>
-      <div id="animal-id"></div>
-      <div id="link-container"></div>
+      <div>
+        <p><strong>ID do Animal:</strong> <span id="animal-id"></span></p>
+        <p><strong>Link:</strong> <a id="animal-link" target="_blank"></a></p>
+      </div>
     </div>
+    
+    <button id="logout-btn" class="google-btn">Sair</button>
   </div>
 
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
   <script type="module">
+    // Importações do Firebase
     import { auth, provider } from './firebase-config.js';
     import { signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
-    // UID do administrador autorizado
+    // Configurações
     const ADMIN_UID = 'P9V0pv5f1FUvv8HnFxZSx5m9bJq2';
-    
-    // Elementos do DOM
     const loginContainer = document.getElementById('login-container');
     const appContent = document.getElementById('app-content');
     const accessDenied = document.getElementById('access-denied');
     const googleLoginBtn = document.getElementById('googleLogin');
     const logoutBtn = document.getElementById('logout-btn');
+    const generateBtn = document.getElementById('generate-btn');
+    const qrContainer = document.getElementById('qr-container');
+    const animalIdSpan = document.getElementById('animal-id');
+    const animalLink = document.getElementById('animal-link');
 
-    // Verificar autenticação
+    // Verificar estado de autenticação
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Verificar se é o UID autorizado
         if (user.uid === ADMIN_UID) {
+          // Acesso permitido
           loginContainer.style.display = 'none';
           accessDenied.style.display = 'none';
           appContent.style.display = 'block';
         } else {
+          // Acesso negado
           loginContainer.style.display = 'none';
           appContent.style.display = 'none';
           accessDenied.style.display = 'block';
-          // Desconectar usuário não autorizado
+          // Desconectar após 3 segundos
           setTimeout(() => auth.signOut(), 3000);
         }
       } else {
-        loginContainer.style.display = 'block';
+        // Não autenticado
+        loginContainer.style.display = 'flex';
         appContent.style.display = 'none';
         accessDenied.style.display = 'none';
       }
     });
 
-    // Configurar botão de login
+    // Evento de login
     googleLoginBtn.addEventListener('click', async () => {
       try {
         await signInWithPopup(auth, provider);
       } catch (error) {
         console.error('Erro no login:', error);
-        alert('Erro ao fazer login. Tente novamente.');
+        alert('Erro ao fazer login: ' + error.message);
       }
     });
 
-    // Configurar botão de logout
+    // Evento de logout
     logoutBtn.addEventListener('click', async () => {
       try {
         await signOut(auth);
@@ -154,16 +160,16 @@
     });
 
     // Gerar QR Code
-    document.getElementById('generate-btn').addEventListener('click', gerarQRCode);
-
-    function gerarQRCode() {
-      const animalId = gerarIdUnico();
+    generateBtn.addEventListener('click', () => {
+      const animalId = generateAnimalId();
       const url = `${window.location.origin}/animal.html?id=${animalId}`;
       
-      document.getElementById('animal-id').textContent = `ID do Animal: ${animalId}`;
-      document.getElementById('link-container').innerHTML = 
-        `Link: <a href="${url}" target="_blank">${url}</a>`;
+      // Atualizar a interface
+      animalIdSpan.textContent = animalId;
+      animalLink.href = url;
+      animalLink.textContent = url;
       
+      // Gerar QR Code
       new QRious({
         element: document.getElementById('qr'),
         value: url,
@@ -171,16 +177,23 @@
         level: 'H'
       });
       
-      document.getElementById('qr-container').style.display = 'block';
+      // Mostrar container
+      qrContainer.style.display = 'block';
+      
+      // Copiar ID para área de transferência
       navigator.clipboard.writeText(animalId).then(() => {
         alert(`ID ${animalId} copiado para a área de transferência!`);
       });
-    }
+    });
 
-    function gerarIdUnico() {
+    // Gerar ID único
+    function generateAnimalId() {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-      return Array.from({length: 20}, () => 
-        chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+      let result = '';
+      for (let i = 0; i < 20; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
     }
   </script>
 </body>
