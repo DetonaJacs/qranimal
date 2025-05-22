@@ -23,7 +23,7 @@ const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
   prompt: 'select_account',
-  redirect_uri: window.location.origin // Adicione esta linha
+  redirect_uri: window.location.origin // Adiciona o domínio atual como URI de redirecionamento
 });
 
 export { db, auth, provider };
