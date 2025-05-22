@@ -17,7 +17,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
-// Configurações adicionais do provedor Google
 provider.setCustomParameters({
   prompt: 'select_account'
 });
