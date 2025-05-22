@@ -5,26 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com; script-src 'self' https://www.gstatic.com 'unsafe-inline';">
   <title>QR Animal</title>
+  <style>
+    /* Mover estilos inline para aqui */
+    #form-container, #dados-animal { display: none; }
+    #error-message { color: red; }
+    #invalid-id-message { color: #d32f2f; text-align: center; margin-top: 2rem; }
+  </style>
 </head>
 <body>
-  <h1>Cadastro do Animal</h1>
-  <div id="form-container" style="display:none;">
-    <form id="animalForm">
-      <input type="text" id="nome" placeholder="Nome do animal" required maxlength="100"/><br>
-      <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/><br>
-      <input type="text" id="raca" placeholder="Raça" required maxlength="50"/><br>
-      <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea><br>
-      <button type="submit" id="submit-btn">Salvar</button>
-      <div id="error-message" style="color:red;"></div>
-    </form>
-  </div>
+  <div id="content-container">
+    <h1>Cadastro do Animal</h1>
+    <div id="form-container">
+      <form id="animalForm">
+        <input type="text" id="nome" placeholder="Nome do animal" required maxlength="100"/><br>
+        <input type="text" id="especie" placeholder="Espécie" required maxlength="50"/><br>
+        <input type="text" id="raca" placeholder="Raça" required maxlength="50"/><br>
+        <textarea id="observacoes" placeholder="Observações" maxlength="500"></textarea><br>
+        <button type="submit" id="submit-btn">Salvar</button>
+        <div id="error-message"></div>
+      </form>
+    </div>
 
-  <div id="dados-animal" style="display:none;">
-    <h2>Dados cadastrados</h2>
-    <p><strong>Nome:</strong> <span id="vNome"></span></p>
-    <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
-    <p><strong>Raça:</strong> <span id="vRaca"></span></p>
-    <p><strong>Observações:</strong> <span id="vObs"></span></p>
+    <div id="dados-animal">
+      <h2>Dados cadastrados</h2>
+      <p><strong>Nome:</strong> <span id="vNome"></span></p>
+      <p><strong>Espécie:</strong> <span id="vEspecie"></span></p>
+      <p><strong>Raça:</strong> <span id="vRaca"></span></p>
+      <p><strong>Observações:</strong> <span id="vObs"></span></p>
+    </div>
+
+    <div id="invalid-id-message"></div>
   </div>
 
   <script type="module">
@@ -32,40 +42,83 @@
     import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
-    // Verifica autenticação para edição
+    // Configuração inicial
     const auth = getAuth();
     let isAuthenticated = false;
+    
+    // Elementos do DOM
+    const contentContainer = document.getElementById('content-container');
+    const invalidIdMessage = document.getElementById('invalid-id-message');
+    const formContainer = document.getElementById('form-container');
+    const dataContainer = document.getElementById('dados-animal');
 
+    // Verificar autenticação
     onAuthStateChanged(auth, (user) => {
       isAuthenticated = !!user;
+      checkAnimalId(); // Re-verificar o ID quando o estado de autenticação mudar
     });
 
-    const params = new URLSearchParams(window.location.search);
-    const animalId = params.get("id");
+    // Verificar ID do animal
+    function checkAnimalId() {
+      const params = new URLSearchParams(window.location.search);
+      let animalId = params.get("id");
 
-    if (!animalId || !/^[a-zA-Z0-9_-]{20}$/.test(animalId)) {
-      document.body.innerHTML = "<h2>ID do animal inválido ou não especificado.</h2>";
-      throw new Error("ID inválido");
+      // Limpar e validar o ID
+      if (animalId) {
+        animalId = animalId.trim();
+        
+        // Regex mais flexível para IDs (8-32 caracteres alfanuméricos, hífens e underlines)
+        if (!/^[a-zA-Z0-9_-]{8,32}$/.test(animalId)) {
+          showInvalidIdMessage("ID do animal inválido. Deve conter 8 a 32 caracteres alfanuméricos.");
+          return;
+        }
+        
+        loadAnimalData(animalId);
+      } else {
+        showInvalidIdMessage("ID do animal não especificado na URL.");
+      }
     }
 
-    const docRef = doc(db, "animais", animalId);
-    const docSnap = await getDoc(docRef);
+    async function loadAnimalData(animalId) {
+      try {
+        const docRef = doc(db, "animais", animalId);
+        const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      // Sanitiza a saída para prevenir XSS
-      document.getElementById("vNome").textContent = data.nome;
-      document.getElementById("vEspecie").textContent = data.especie;
-      document.getElementById("vRaca").textContent = data.raca;
-      document.getElementById("vObs").textContent = data.observacoes;
-      document.getElementById("dados-animal").style.display = "block";
-    } else if (isAuthenticated) {
-      document.getElementById("form-container").style.display = "block";
+        if (docSnap.exists()) {
+          showAnimalData(docSnap.data());
+        } else if (isAuthenticated) {
+          showAnimalForm(animalId);
+        } else {
+          showInvalidIdMessage("Animal não encontrado. Faça login para cadastrar.");
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        showInvalidIdMessage("Erro ao acessar o banco de dados. Tente novamente.");
+      }
+    }
+
+    function showAnimalData(data) {
+      document.getElementById("vNome").textContent = data.nome || "Não informado";
+      document.getElementById("vEspecie").textContent = data.especie || "Não informado";
+      document.getElementById("vRaca").textContent = data.raca || "Não informado";
+      document.getElementById("vObs").textContent = data.observacoes || "Nenhuma observação";
+      dataContainer.style.display = "block";
+      formContainer.style.display = "none";
+      invalidIdMessage.style.display = "none";
+    }
+
+    function showAnimalForm(animalId) {
+      formContainer.style.display = "block";
+      dataContainer.style.display = "none";
+      invalidIdMessage.style.display = "none";
+
       document.getElementById("animalForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         
         const submitBtn = document.getElementById("submit-btn");
         submitBtn.disabled = true;
+        const errorElement = document.getElementById("error-message");
+        errorElement.textContent = "";
         
         try {
           const nome = sanitizeInput(document.getElementById("nome").value);
@@ -77,7 +130,7 @@
             throw new Error("Preencha todos os campos obrigatórios");
           }
 
-          await setDoc(docRef, { 
+          await setDoc(doc(db, "animais", animalId), { 
             nome, 
             especie, 
             raca, 
@@ -89,14 +142,20 @@
           alert("Dados salvos com sucesso!");
           location.reload();
         } catch (error) {
-          document.getElementById("error-message").textContent = error.message;
+          errorElement.textContent = error.message;
           submitBtn.disabled = false;
         }
       });
     }
 
+    function showInvalidIdMessage(message) {
+      contentContainer.style.display = "none";
+      invalidIdMessage.innerHTML = `<h2>${message}</h2><p>Acesse através de um QR Code válido.</p>`;
+      invalidIdMessage.style.display = "block";
+    }
+
     function sanitizeInput(str) {
-      return String(str).replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
+      return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
     }
   </script>
 </body>
