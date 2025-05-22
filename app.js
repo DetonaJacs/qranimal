@@ -20,7 +20,7 @@ let currentUser = null;
 let animalId = null;
 let animalData = null;
 
-// Função para verificar ID do animal na URL (agora definida antes de ser chamada)
+// Função para verificar ID do animal na URL
 function checkAnimalId() {
   const params = new URLSearchParams(window.location.search);
   animalId = params.get("id");
@@ -30,11 +30,36 @@ function checkAnimalId() {
     hideLoading();
     return;
   }
-  
-  loadAnimalData();
 }
 
-// Restante das funções (todas definidas antes de serem chamadas)
+// Função principal de autenticação
+async function handleAuth() {
+  try {
+    // Verifica se está retornando de um redirecionamento de login
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
+      currentUser = result.user;
+      updateUI();
+      await loadAnimalData();
+      return;
+    }
+
+    // Monitora mudanças no estado de autenticação
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      updateUI();
+      if (user) {
+        await loadAnimalData();
+      }
+    });
+  } catch (error) {
+    console.error("Erro na autenticação:", error);
+    showMessage(`Erro no login: ${error.message}`, true);
+    hideLoading();
+  }
+}
+
+// Carrega os dados do animal
 async function loadAnimalData() {
   try {
     const docRef = doc(db, "animais", animalId);
@@ -56,6 +81,7 @@ async function loadAnimalData() {
   }
 }
 
+// Mostra os dados do animal
 function showAnimalData() {
   document.getElementById("vNome").textContent = animalData?.nome || "Não informado";
   document.getElementById("vEspecie").textContent = animalData?.especie || "Não informado";
@@ -69,6 +95,7 @@ function showAnimalData() {
   editBtn.style.display = currentUser ? "block" : "none";
 }
 
+// Mostra o formulário para edição
 function showAnimalForm() {
   formContainer.style.display = "block";
   dataContainer.style.display = "none";
@@ -115,29 +142,15 @@ function showAnimalForm() {
   };
 }
 
-async function setupAuth() {
-  onAuthStateChanged(auth, (user) => {
-    currentUser = user;
-    updateUI();
-    
-    if (user) {
-      userInfoElement.style.display = 'flex';
-      userAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
-      userEmail.textContent = user.email;
-      loadAnimalData();
-    } else {
-      userInfoElement.style.display = 'none';
-      if (!animalData) {
-        loginContainer.style.display = 'block';
-      }
-    }
-  });
-
+// Configura os listeners de autenticação
+function setupAuthListeners() {
   googleLoginBtn.addEventListener('click', async () => {
     try {
+      loadingElement.style.display = 'block';
       await signInWithRedirect(auth, provider);
     } catch (error) {
       showMessage(`Erro no login: ${error.message}`, true);
+      hideLoading();
     }
   });
 
@@ -146,12 +159,12 @@ async function setupAuth() {
       await signOut(auth);
     } catch (error) {
       console.error('Erro ao sair:', error);
+      showMessage('Erro ao fazer logout', true);
     }
   });
 
   editBtn?.addEventListener('click', () => {
     if (!animalData) return;
-    
     showAnimalForm();
     document.getElementById('nome').value = animalData.nome || '';
     document.getElementById('especie').value = animalData.especie || '';
@@ -160,41 +173,41 @@ async function setupAuth() {
   });
 }
 
+// Atualiza a interface com base no estado
 function updateUI() {
   if (currentUser) {
+    userInfoElement.style.display = 'flex';
+    userAvatar.src = currentUser.photoURL || 'https://via.placeholder.com/40';
+    userEmail.textContent = currentUser.email;
     loginContainer.style.display = 'none';
-  } else if (!animalData) {
-    loginContainer.style.display = 'block';
+  } else {
+    userInfoElement.style.display = 'none';
+    if (!animalData) {
+      loginContainer.style.display = 'block';
+    }
   }
 }
 
+// Mostra mensagens para o usuário
 function showMessage(message, isError) {
   authMessage.textContent = message;
   authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
   authMessage.style.display = 'block';
 }
 
+// Esconde o elemento de loading
 function hideLoading() {
   loadingElement.style.display = 'none';
 }
 
+// Sanitiza inputs para prevenir XSS
 function sanitizeInput(str) {
   return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").substring(0, 500);
 }
 
-// Inicialização (agora no final do arquivo, depois de todas as definições)
+// Inicialização da aplicação
 document.addEventListener('DOMContentLoaded', async () => {
-  checkAnimalId(); // Agora a função já está definida
-  await setupAuth();
-  
-  try {
-    const result = await getRedirectResult(auth);
-    if (result) {
-      currentUser = result.user;
-      updateUI();
-      loadAnimalData();
-    }
-  } catch (error) {
-    showMessage(`Erro no login: ${error.message}`, true);
-  }
+  checkAnimalId();
+  setupAuthListeners();
+  await handleAuth();
 });
