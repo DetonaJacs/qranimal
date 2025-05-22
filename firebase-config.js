@@ -12,20 +12,17 @@ const firebaseConfig = {
   measurementId: "G-7NV3NQN1TE"
 };
 
-const provider = new GoogleAuthProvider();
-provider.addScope('email');
-provider.addScope('profile');
-provider.setCustomParameters({
-  prompt: 'select_account'
-});
-
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize services
 const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
 const db = getFirestore(app);
 
+// Configure Google provider
+const provider = new GoogleAuthProvider();
 provider.setCustomParameters({
   prompt: 'select_account'
 });
 
-export { db, auth, provider }; // Removido storage
+export { db, auth, provider };
