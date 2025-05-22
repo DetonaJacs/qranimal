@@ -12,6 +12,13 @@ const firebaseConfig = {
   measurementId: "G-7NV3NQN1TE"
 };
 
+const provider = new GoogleAuthProvider();
+provider.addScope('email');
+provider.addScope('profile');
+provider.setCustomParameters({
+  prompt: 'select_account'
+});
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
