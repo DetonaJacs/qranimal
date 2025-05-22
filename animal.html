@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com; script-src 'self' https://www.gstatic.com 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self' https://www.gstatic.com https://www.googleapis.com https://firebase.googleapis.com https://*.firebaseio.com;
+  script-src 'self' https://www.gstatic.com https://www.googleapis.com https://firebase.googleapis.com 'unsafe-inline';
+  connect-src 'self' https://*.firebaseio.com https://www.googleapis.com;
+">
   <title>QR Animal</title>
   <style>
     /* Estilos melhorados */
