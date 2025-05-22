@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Verifica autenticação
   auth.onAuthStateChanged((user) => {
-    if (!user || user.email !== 'seu-email@gmail.com') {
+    if (!user || user.email !== 'jacson311@gmail.com') {
       window.location.href = 'login.html';
       return;
     }
