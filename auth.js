@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = result.user;
       
       // Verifica se é um email autorizado
-      if (user.email === 'seu-email@gmail.com') {
+      if (user.email === 'jacson311@gmail.com') {
         window.location.href = 'gerar-qrcode.html';
       } else {
         await auth.signOut();
