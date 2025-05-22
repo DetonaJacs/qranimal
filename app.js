@@ -36,6 +36,26 @@ const utils = {
     elements.authMessage.textContent = message;
     elements.authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
     utils.showElement(elements.authMessage);
+  },
+  // Nova função para verificar permissões
+  checkPermissions: () => {
+    if (!state.currentUser || !state.animalData) {
+      console.log('Permissões: Dados insuficientes para verificar');
+      return false;
+    }
+    
+    const isOwner = state.currentUser.uid === state.animalData.createdBy;
+    const isAdmin = state.currentUser.uid === ADMIN_UID;
+    
+    console.log('Verificação de permissões:', {
+      userUID: state.currentUser.uid,
+      animalOwner: state.animalData.createdBy,
+      isOwner,
+      isAdmin,
+      adminUID: ADMIN_UID
+    });
+    
+    return isOwner || isAdmin;
   }
 };
 
@@ -43,32 +63,42 @@ const utils = {
 const authFunctions = {
   initializeAuth: async () => {
     try {
+      console.log('Iniciando autenticação...');
+      
       // Verifica resultado de redirecionamento
       const result = await getRedirectResult(auth);
       if (result?.user) {
+        console.log('Usuário autenticado via redirecionamento:', result.user.email);
         state.currentUser = result.user;
       }
 
       // Observa mudanças de estado
       onAuthStateChanged(auth, (user) => {
+        console.log('Estado de autenticação alterado:', user ? user.email : 'Usuário deslogado');
         state.currentUser = user;
+        
+        // Atualiza a UI imediatamente
         ui.updateUI();
         
         // Se usuário logado e dados não carregados
-        if (user && !state.animalData) {
+        if (user && state.animalId && !state.animalData) {
+          console.log('Carregando dados do animal para usuário autenticado...');
           animalFunctions.loadAnimalData();
         }
       });
     } catch (error) {
+      console.error('Erro na autenticação:', error);
       utils.showMessage(`Erro na autenticação: ${error.message}`, true);
     }
   },
   
   handleLogin: async () => {
     try {
+      console.log('Iniciando login...');
       utils.showElement(elements.loading);
       await signInWithRedirect(auth, provider);
     } catch (error) {
+      console.error('Erro no login:', error);
       utils.hideElement(elements.loading);
       utils.showMessage(`Erro no login: ${error.message}`, true);
     }
@@ -76,9 +106,11 @@ const authFunctions = {
   
   handleLogout: async () => {
     try {
+      console.log('Iniciando logout...');
       utils.showElement(elements.loading);
       await signOut(auth);
     } catch (error) {
+      console.error('Erro no logout:', error);
       utils.showMessage(`Erro ao sair: ${error.message}`, true);
     } finally {
       utils.hideElement(elements.loading);
@@ -89,6 +121,11 @@ const authFunctions = {
 // Funções de interface
 const ui = {
   updateUI: () => {
+    console.log('Atualizando UI... Estado atual:', {
+      user: state.currentUser?.email,
+      animalData: !!state.animalData
+    });
+    
     if (state.currentUser) {
       // Usuário logado
       utils.showElement(elements.userInfo);
@@ -98,7 +135,8 @@ const ui = {
       
       // Se tem dados do animal, verifica permissões
       if (state.animalData) {
-        const canEdit = state.currentUser.uid === state.animalData.createdBy || state.currentUser.uid === ADMIN_UID;
+        const canEdit = utils.checkPermissions();
+        console.log('Usuário pode editar?', canEdit);
         elements.editBtn.style.display = canEdit ? "block" : "none";
       }
     } else {
@@ -110,7 +148,12 @@ const ui = {
   },
   
   showAnimalData: () => {
-    if (!state.animalData) return;
+    if (!state.animalData) {
+      console.warn('Tentativa de mostrar dados sem animalData');
+      return;
+    }
+    
+    console.log('Mostrando dados do animal:', state.animalData);
     
     document.getElementById("vNome").textContent = state.animalData.nome || "Não informado";
     document.getElementById("vEspecie").textContent = state.animalData.especie || "Não informado";
@@ -122,19 +165,25 @@ const ui = {
   },
   
   showAnimalForm: () => {
+    console.log('Tentando mostrar formulário de edição...');
+    
     if (!state.currentUser) {
+      console.log('Usuário não autenticado - mostrando mensagem de login');
       utils.showMessage("Faça login para editar", true);
       return;
     }
 
     if (!state.animalData) {
+      console.warn('Dados do animal não carregados');
       utils.showMessage("Dados do animal não carregados", true);
       return;
     }
 
-    const canEdit = state.currentUser.uid === state.animalData.createdBy || state.currentUser.uid === ADMIN_UID;
+    const canEdit = utils.checkPermissions();
+    console.log('Permissão para editar:', canEdit);
+    
     if (!canEdit) {
-      utils.showMessage("Apenas o dono pode editar este animal", true);
+      utils.showMessage("Apenas o dono ou administrador pode editar este animal", true);
       return;
     }
 
@@ -152,7 +201,12 @@ const ui = {
 // Funções de dados do animal
 const animalFunctions = {
   loadAnimalData: async () => {
-    if (!state.animalId) return;
+    if (!state.animalId) {
+      console.error('Nenhum animalId definido');
+      return;
+    }
+    
+    console.log('Carregando dados do animal ID:', state.animalId);
     
     try {
       utils.showElement(elements.loading);
@@ -161,11 +215,21 @@ const animalFunctions = {
 
       if (docSnap.exists()) {
         state.animalData = docSnap.data();
+        console.log('Dados do animal carregados:', state.animalData);
+        
+        // Verificação crítica - garante que createdBy existe
+        if (!state.animalData.createdBy) {
+          console.error('Animal sem createdBy!', state.animalData);
+          throw new Error("Dados do animal estão incompletos (falta createdBy)");
+        }
+        
         ui.showAnimalData();
       } else {
+        console.warn('Animal não encontrado no Firestore');
         utils.showMessage("Animal não encontrado.", true);
       }
     } catch (error) {
+      console.error('Erro ao carregar dados do animal:', error);
       utils.showMessage(`Erro ao carregar dados: ${error.message}`, true);
     } finally {
       utils.hideElement(elements.loading);
@@ -175,6 +239,7 @@ const animalFunctions = {
   
   saveAnimalData: async (e) => {
     e.preventDefault();
+    console.log('Salvando dados do animal...');
     
     try {
       const nome = document.getElementById("nome").value.trim();
@@ -186,19 +251,30 @@ const animalFunctions = {
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
+      if (!utils.checkPermissions()) {
+        throw new Error("Você não tem permissão para editar este animal");
+      }
+
       utils.showElement(elements.loading);
       
+      console.log('Atualizando dados no Firestore...');
       await setDoc(doc(db, "animais", state.animalId), { 
-        nome, especie, raca, observacoes,
+        nome, 
+        especie, 
+        raca, 
+        observacoes,
         updatedAt: new Date(),
         updatedBy: state.currentUser.uid,
+        // Mantém os dados originais
         createdBy: state.animalData.createdBy,
         createdAt: state.animalData.createdAt
       });
 
+      console.log('Dados atualizados com sucesso!');
       alert("Dados atualizados com sucesso!");
       location.reload();
     } catch (error) {
+      console.error('Erro ao salvar dados:', error);
       document.getElementById("error-message").textContent = error.message;
     } finally {
       utils.hideElement(elements.loading);
@@ -208,11 +284,15 @@ const animalFunctions = {
 
 // Inicialização
 const init = () => {
+  console.log('Inicializando aplicação...');
+  
   // Obtém ID do animal da URL
   const params = new URLSearchParams(window.location.search);
   state.animalId = params.get("id");
+  console.log('Animal ID da URL:', state.animalId);
   
   if (!state.animalId) {
+    console.error('Nenhum animalId especificado na URL');
     utils.showMessage("ID do animal não especificado", true);
     return;
   }
@@ -222,6 +302,14 @@ const init = () => {
   elements.logoutBtn?.addEventListener('click', authFunctions.handleLogout);
   elements.editBtn?.addEventListener('click', ui.showAnimalForm);
   elements.animalForm?.addEventListener('submit', animalFunctions.saveAnimalData);
+
+  // Debug: mostra estado inicial
+  console.log('Estado inicial:', {
+    currentUser: state.currentUser,
+    animalId: state.animalId,
+    animalData: state.animalData,
+    adminUID: ADMIN_UID
+  });
 
   // Inicia processos
   authFunctions.initializeAuth();
