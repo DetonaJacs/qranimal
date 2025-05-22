@@ -11,9 +11,12 @@ const firebaseConfig = {
   measurementId: "G-7NV3NQN1TE"
 };
 
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Configuração do provedor Google
 provider.setCustomParameters({
