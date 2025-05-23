@@ -1,14 +1,26 @@
 import { db, auth, provider } from './firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
-import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-import { browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { 
+  signInWithRedirect, 
+  signOut, 
+  onAuthStateChanged, 
+  getRedirectResult,
+  browserLocalPersistence,
+  browserSessionPersistence
+} from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
-// Configura persistência
-auth.setPersistence(browserLocalPersistence)
-  .then(() => console.log('Persistência configurada'))
-  .catch((error) => console.error('Erro na persistência:', error));
 // Configurações
 const ADMIN_UID = "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
+
+// Configura persistência de autenticação
+(async function() {
+  try {
+    await auth.setPersistence(browserLocalPersistence);
+    console.log('Persistência configurada com sucesso');
+  } catch (error) {
+    console.error('Erro ao configurar persistência:', error);
+  }
+})();
 
 // Elementos DOM
 const elements = {
@@ -30,19 +42,20 @@ const elements = {
 const state = {
   currentUser: null,
   animalId: null,
-  animalData: null
+  animalData: null,
+  isInitialized: false
 };
 
 // Funções utilitárias
 const utils = {
-  showElement: (element) => element.classList.remove('hidden'),
-  hideElement: (element) => element.classList.add('hidden'),
+  showElement: (element) => element && element.classList.remove('hidden'),
+  hideElement: (element) => element && element.classList.add('hidden'),
   showMessage: (message, isError = false) => {
+    if (!elements.authMessage) return;
     elements.authMessage.textContent = message;
     elements.authMessage.style.color = isError ? '#d32f2f' : '#388e3c';
-    utils.showElement(elements.authMessage);
+    elements.authMessage.classList.remove('hidden');
   },
-  // Nova função para verificar permissões
   checkPermissions: () => {
     if (!state.currentUser || !state.animalData) {
       console.log('Permissões: Dados insuficientes para verificar');
@@ -56,11 +69,18 @@ const utils = {
       userUID: state.currentUser.uid,
       animalOwner: state.animalData.createdBy,
       isOwner,
-      isAdmin,
-      adminUID: ADMIN_UID
+      isAdmin
     });
     
     return isOwner || isAdmin;
+  },
+  validateAnimalData: (data) => {
+    if (!data) return false;
+    if (!data.createdBy) {
+      console.error('Dados do animal inválidos - falta createdBy');
+      return false;
+    }
+    return true;
   }
 };
 
@@ -68,74 +88,86 @@ const utils = {
 const authFunctions = {
   initializeAuth: async () => {
     try {
-      // Primeiro verifica se já está autenticado
-      const user = auth.currentUser;
-      if (user) {
-        state.currentUser = user;
-        ui.updateUI();
-      }
-
-      // Depois configura o observer
-onAuthStateChanged(auth, (user) => {
-  console.group('Mudança de estado de autenticação');
-  console.log('Usuário:', user);
-  console.log('Token:', user?.accessToken);
-  console.log('UID:', user?.uid);
-  console.groupEnd();
-  
-  state.currentUser = user;
-  ui.updateUI();
-  
-  if (user) {
-    // Verifica se o token é válido
-    user.getIdTokenResult()
-      .then((idTokenResult) => {
-        console.log('Token válido até:', idTokenResult.expirationTime);
-      })
-      .catch((error) => {
-        console.error('Erro ao verificar token:', error);
-      });
-    
-    if (state.animalId && !state.animalData) {
-      animalFunctions.loadAnimalData();
-    }
-  }
-});
-
-      // Por último verifica redirecionamento
+      console.log('Iniciando autenticação...');
+      
+      // Configura observer de estado primeiro
+      this.setupAuthObserver();
+      
+      // Verifica redirecionamento
       const result = await getRedirectResult(auth);
       if (result?.user) {
+        console.log('Usuário autenticado via redirecionamento:', result.user.email);
         state.currentUser = result.user;
         ui.updateUI();
       }
+      
+      state.isInitialized = true;
     } catch (error) {
       console.error('Erro na inicialização da autenticação:', error);
       utils.showMessage(`Erro na autenticação: ${error.message}`, true);
     }
   },
   
-handleLogin: async () => {
-  sessionStorage.setItem('isRedirecting', 'true');
-    
-    // Força novo login sempre
-    await auth.signOut();
-    await signInWithRedirect(auth, provider);
-    
-    // Adiciona timeout para evitar loops
-    setTimeout(() => {
-      if (!state.currentUser) {
-        utils.showMessage("Tempo excedido no login. Tente novamente.", true);
-        elements.googleLoginBtn.disabled = false;
-        utils.hideElement(elements.loading);
+  setupAuthObserver: () => {
+    return onAuthStateChanged(auth, async (user) => {
+      console.log('Estado de autenticação alterado:', user ? `Logado: ${user.email}` : 'Deslogado');
+      
+      state.currentUser = user;
+      ui.updateUI();
+      
+      if (user) {
+        // Verifica token
+        try {
+          const tokenResult = await user.getIdTokenResult();
+          console.log('Token válido até:', tokenResult.expirationTime);
+        } catch (tokenError) {
+          console.error('Erro ao verificar token:', tokenError);
+        }
+        
+        // Carrega dados do animal se necessário
+        if (state.animalId && !state.animalData) {
+          await animalFunctions.loadAnimalData();
+        }
       }
-    }, 10000);
-  } catch (error) {
-    console.error('Erro no login:', error);
-    elements.googleLoginBtn.disabled = false;
-    utils.hideElement(elements.loading);
-    utils.showMessage(`Erro no login: ${error.message}`, true);
-  }
-},
+    });
+  },
+  
+  handleLogin: async () => {
+    if (!navigator.onLine) {
+      utils.showMessage("Sem conexão com a internet", true);
+      return;
+    }
+    
+    try {
+      console.log('Iniciando login...');
+      utils.showElement(elements.loading);
+      elements.googleLoginBtn.disabled = true;
+      
+      // Força novo login
+      await signOut(auth);
+      sessionStorage.setItem('isRedirecting', 'true');
+      await signInWithRedirect(auth, provider);
+      
+      // Timeout de segurança
+      setTimeout(() => {
+        if (!state.currentUser) {
+          utils.showMessage("Tempo excedido no login. Tente novamente.", true);
+          elements.googleLoginBtn.disabled = false;
+          utils.hideElement(elements.loading);
+        }
+      }, 15000);
+    } catch (error) {
+      console.error('Erro no login:', error);
+      elements.googleLoginBtn.disabled = false;
+      utils.hideElement(elements.loading);
+      
+      let errorMessage = `Erro no login: ${error.message}`;
+      if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Erro de conexão. Verifique sua internet.";
+      }
+      utils.showMessage(errorMessage, true);
+    }
+  },
   
   handleLogout: async () => {
     try {
@@ -154,6 +186,8 @@ handleLogin: async () => {
 // Funções de interface
 const ui = {
   updateUI: () => {
+    if (!state.isInitialized) return;
+    
     console.log('Atualizando UI... Estado atual:', {
       user: state.currentUser?.email,
       animalData: !!state.animalData
@@ -166,11 +200,9 @@ const ui = {
       elements.userAvatar.src = state.currentUser.photoURL || 'https://via.placeholder.com/40';
       utils.hideElement(elements.loginContainer);
       
-      // Se tem dados do animal, verifica permissões
+      // Verifica permissões se tiver dados do animal
       if (state.animalData) {
-        const canEdit = utils.checkPermissions();
-        console.log('Usuário pode editar?', canEdit);
-        elements.editBtn.style.display = canEdit ? "block" : "none";
+        elements.editBtn.style.display = utils.checkPermissions() ? "block" : "none";
       }
     } else {
       // Usuário não logado
@@ -181,8 +213,9 @@ const ui = {
   },
   
   showAnimalData: () => {
-    if (!state.animalData) {
-      console.warn('Tentativa de mostrar dados sem animalData');
+    if (!utils.validateAnimalData(state.animalData)) {
+      console.warn('Tentativa de mostrar dados inválidos');
+      utils.showMessage("Dados do animal estão incompletos", true);
       return;
     }
     
@@ -198,24 +231,17 @@ const ui = {
   },
   
   showAnimalForm: () => {
-    console.log('Tentando mostrar formulário de edição...');
-    
     if (!state.currentUser) {
-      console.log('Usuário não autenticado - mostrando mensagem de login');
       utils.showMessage("Faça login para editar", true);
       return;
     }
 
-    if (!state.animalData) {
-      console.warn('Dados do animal não carregados');
-      utils.showMessage("Dados do animal não carregados", true);
+    if (!utils.validateAnimalData(state.animalData)) {
+      utils.showMessage("Dados do animal não carregados corretamente", true);
       return;
     }
 
-    const canEdit = utils.checkPermissions();
-    console.log('Permissão para editar:', canEdit);
-    
-    if (!canEdit) {
+    if (!utils.checkPermissions()) {
       utils.showMessage("Apenas o dono ou administrador pode editar este animal", true);
       return;
     }
@@ -236,6 +262,7 @@ const animalFunctions = {
   loadAnimalData: async () => {
     if (!state.animalId) {
       console.error('Nenhum animalId definido');
+      utils.showMessage("ID do animal não especificado", true);
       return;
     }
     
@@ -248,12 +275,9 @@ const animalFunctions = {
 
       if (docSnap.exists()) {
         state.animalData = docSnap.data();
-        console.log('Dados do animal carregados:', state.animalData);
         
-        // Verificação crítica - garante que createdBy existe
-        if (!state.animalData.createdBy) {
-          console.error('Animal sem createdBy!', state.animalData);
-          throw new Error("Dados do animal estão incompletos (falta createdBy)");
+        if (!utils.validateAnimalData(state.animalData)) {
+          throw new Error("Dados do animal estão incompletos");
         }
         
         ui.showAnimalData();
@@ -272,8 +296,12 @@ const animalFunctions = {
   
   saveAnimalData: async (e) => {
     e.preventDefault();
-    console.log('Salvando dados do animal...');
     
+    if (!utils.checkPermissions()) {
+      utils.showMessage("Você não tem permissão para editar este animal", true);
+      return;
+    }
+
     try {
       const nome = document.getElementById("nome").value.trim();
       const especie = document.getElementById("especie").value.trim();
@@ -284,13 +312,8 @@ const animalFunctions = {
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
-      if (!utils.checkPermissions()) {
-        throw new Error("Você não tem permissão para editar este animal");
-      }
-
       utils.showElement(elements.loading);
       
-      console.log('Atualizando dados no Firestore...');
       await setDoc(doc(db, "animais", state.animalId), { 
         nome, 
         especie, 
@@ -298,12 +321,10 @@ const animalFunctions = {
         observacoes,
         updatedAt: new Date(),
         updatedBy: state.currentUser.uid,
-        // Mantém os dados originais
         createdBy: state.animalData.createdBy,
         createdAt: state.animalData.createdAt
       });
 
-      console.log('Dados atualizados com sucesso!');
       alert("Dados atualizados com sucesso!");
       location.reload();
     } catch (error) {
@@ -317,38 +338,33 @@ const animalFunctions = {
 
 // Inicialização
 const init = () => {
-  // Verifica se está voltando de redirecionamento
-  const isRedirectBack = sessionStorage.getItem('isRedirecting') === 'true';
-  
-  if (isRedirectBack) {
+  // Verifica redirecionamento
+  if (sessionStorage.getItem('isRedirecting') === 'true') {
     sessionStorage.removeItem('isRedirecting');
     utils.showElement(elements.loading);
-  };
-  
-  // Obtém ID do animal da URL
-  const params = new URLSearchParams(window.location.search);
-  state.animalId = params.get("id");
-  console.log('Animal ID da URL:', state.animalId);
+  }
+
+  // Obtém ID do animal
+  state.animalId = new URLSearchParams(window.location.search).get("id");
   
   if (!state.animalId) {
-    console.error('Nenhum animalId especificado na URL');
-    utils.showMessage("ID do animal não especificado", true);
+    utils.showMessage("ID do animal não especificado na URL", true);
     return;
   }
 
-  // Event listeners
-  elements.googleLoginBtn?.addEventListener('click', authFunctions.handleLogin);
-  elements.logoutBtn?.addEventListener('click', authFunctions.handleLogout);
-  elements.editBtn?.addEventListener('click', ui.showAnimalForm);
-  elements.animalForm?.addEventListener('submit', animalFunctions.saveAnimalData);
-
-  // Debug: mostra estado inicial
-  console.log('Estado inicial:', {
-    currentUser: state.currentUser,
-    animalId: state.animalId,
-    animalData: state.animalData,
-    adminUID: ADMIN_UID
-  });
+  // Configura listeners
+  if (elements.googleLoginBtn) {
+    elements.googleLoginBtn.addEventListener('click', authFunctions.handleLogin);
+  }
+  if (elements.logoutBtn) {
+    elements.logoutBtn.addEventListener('click', authFunctions.handleLogout);
+  }
+  if (elements.editBtn) {
+    elements.editBtn.addEventListener('click', ui.showAnimalForm);
+  }
+  if (elements.animalForm) {
+    elements.animalForm.addEventListener('submit', animalFunctions.saveAnimalData);
+  }
 
   // Inicia processos
   authFunctions.initializeAuth();
