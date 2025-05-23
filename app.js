@@ -1,7 +1,12 @@
 import { db, auth, provider } from './firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js";
 import { signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
+import { browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
 
+// Configura persistência
+auth.setPersistence(browserLocalPersistence)
+  .then(() => console.log('Persistência configurada'))
+  .catch((error) => console.error('Erro na persistência:', error));
 // Configurações
 const ADMIN_UID = "P9V0pv5f1FUvv8HnFxZSx5m9bJq2";
 
@@ -63,46 +68,74 @@ const utils = {
 const authFunctions = {
   initializeAuth: async () => {
     try {
-      console.log('Iniciando autenticação...');
-      
-      // Verifica resultado de redirecionamento
-      const result = await getRedirectResult(auth);
-      if (result?.user) {
-        console.log('Usuário autenticado via redirecionamento:', result.user.email);
-        state.currentUser = result.user;
+      // Primeiro verifica se já está autenticado
+      const user = auth.currentUser;
+      if (user) {
+        state.currentUser = user;
+        ui.updateUI();
       }
 
-      // Observa mudanças de estado
-      onAuthStateChanged(auth, (user) => {
-        console.log('Estado de autenticação alterado:', user ? user.email : 'Usuário deslogado');
-        state.currentUser = user;
-        
-        // Atualiza a UI imediatamente
-        ui.updateUI();
-        
-        // Se usuário logado e dados não carregados
-        if (user && state.animalId && !state.animalData) {
-          console.log('Carregando dados do animal para usuário autenticado...');
-          animalFunctions.loadAnimalData();
-        }
+      // Depois configura o observer
+onAuthStateChanged(auth, (user) => {
+  console.group('Mudança de estado de autenticação');
+  console.log('Usuário:', user);
+  console.log('Token:', user?.accessToken);
+  console.log('UID:', user?.uid);
+  console.groupEnd();
+  
+  state.currentUser = user;
+  ui.updateUI();
+  
+  if (user) {
+    // Verifica se o token é válido
+    user.getIdTokenResult()
+      .then((idTokenResult) => {
+        console.log('Token válido até:', idTokenResult.expirationTime);
+      })
+      .catch((error) => {
+        console.error('Erro ao verificar token:', error);
       });
+    
+    if (state.animalId && !state.animalData) {
+      animalFunctions.loadAnimalData();
+    }
+  }
+});
+
+      // Por último verifica redirecionamento
+      const result = await getRedirectResult(auth);
+      if (result?.user) {
+        state.currentUser = result.user;
+        ui.updateUI();
+      }
     } catch (error) {
-      console.error('Erro na autenticação:', error);
+      console.error('Erro na inicialização da autenticação:', error);
       utils.showMessage(`Erro na autenticação: ${error.message}`, true);
     }
   },
   
-  handleLogin: async () => {
-    try {
-      console.log('Iniciando login...');
-      utils.showElement(elements.loading);
-      await signInWithRedirect(auth, provider);
-    } catch (error) {
-      console.error('Erro no login:', error);
-      utils.hideElement(elements.loading);
-      utils.showMessage(`Erro no login: ${error.message}`, true);
-    }
-  },
+handleLogin: async () => {
+  sessionStorage.setItem('isRedirecting', 'true');
+    
+    // Força novo login sempre
+    await auth.signOut();
+    await signInWithRedirect(auth, provider);
+    
+    // Adiciona timeout para evitar loops
+    setTimeout(() => {
+      if (!state.currentUser) {
+        utils.showMessage("Tempo excedido no login. Tente novamente.", true);
+        elements.googleLoginBtn.disabled = false;
+        utils.hideElement(elements.loading);
+      }
+    }, 10000);
+  } catch (error) {
+    console.error('Erro no login:', error);
+    elements.googleLoginBtn.disabled = false;
+    utils.hideElement(elements.loading);
+    utils.showMessage(`Erro no login: ${error.message}`, true);
+  }
+},
   
   handleLogout: async () => {
     try {
@@ -284,7 +317,13 @@ const animalFunctions = {
 
 // Inicialização
 const init = () => {
-  console.log('Inicializando aplicação...');
+  // Verifica se está voltando de redirecionamento
+  const isRedirectBack = sessionStorage.getItem('isRedirecting') === 'true';
+  
+  if (isRedirectBack) {
+    sessionStorage.removeItem('isRedirecting');
+    utils.showElement(elements.loading);
+  };
   
   // Obtém ID do animal da URL
   const params = new URLSearchParams(window.location.search);
