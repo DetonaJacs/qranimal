@@ -85,26 +85,59 @@ const utils = {
 };
 
 // Funções de autenticação
+// Funções de autenticação
 const authFunctions = {
   initializeAuth: async () => {
     try {
       console.log('Iniciando autenticação...');
       
-      // Configura observer de estado primeiro
-      this.setupAuthObserver();
-      
-      // Verifica redirecionamento
-      const result = await getRedirectResult(auth);
-      if (result?.user) {
-        console.log('Usuário autenticado via redirecionamento:', result.user.email);
-        state.currentUser = result.user;
+      // 1. Configura o observer de estado de autenticação
+      const authObserver = onAuthStateChanged(auth, async (user) => {
+        console.group('Mudança de estado:');
+        console.log('Usuário:', user ? user.email : 'null');
+        console.log('UID:', user?.uid);
+        console.groupEnd();
+        
+        state.currentUser = user;
+        
+        // Atualiza a UI imediatamente
         ui.updateUI();
+        
+        if (user) {
+          // 2. Verifica token
+          try {
+            const token = await user.getIdToken();
+            console.debug('Token ID:', token.slice(0, 10) + '...');
+          } catch (tokenError) {
+            console.error('Erro no token:', tokenError);
+          }
+          
+          // 3. Carrega dados se necessário
+          if (state.animalId && !state.animalData) {
+            console.log('Carregando dados do animal após autenticação...');
+            await animalFunctions.loadAnimalData();
+          }
+        }
+      });
+
+      // 4. Verifica redirecionamento do login
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log('Resultado do redirecionamento:', result.user.email);
+          state.currentUser = result.user;
+        }
+      } catch (redirectError) {
+        console.error('Erro no redirecionamento:', redirectError);
       }
-      
+
       state.isInitialized = true;
+      return authObserver; // Retorna o observer para limpeza
+      
     } catch (error) {
-      console.error('Erro na inicialização da autenticação:', error);
-      utils.showMessage(`Erro na autenticação: ${error.message}`, true);
+      console.error('Falha na inicialização:', error);
+      utils.showMessage("Erro ao iniciar autenticação", true);
+      throw error;
     }
   },
   
@@ -186,7 +219,10 @@ const authFunctions = {
 // Funções de interface
 const ui = {
   updateUI: () => {
-    if (!state.isInitialized) return;
+    if (!state.isInitialized) {
+  console.log('UI: Aguardando inicialização...');
+  return;
+}
     
     console.log('Atualizando UI... Estado atual:', {
       user: state.currentUser?.email,
